@@ -1,0 +1,18 @@
+[project]
+name = "notepad"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Astro",email = "digital.astronavigator@gmail.com"}
+]
+requires-python = ">=3.12"
+dependencies = [
+    "ollama (>=0.6.1,<0.7.0)",
+    "sqlite-vec (>=0.1.9,<0.2.0)",
+    "prompt-toolkit (>=3.0.52,<4.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
