@@ -2,6 +2,7 @@ import sqlite3
 import sqlite_vec
 import json
 import logging
+from config import EMBEDDING_DIMENSION
 
 logger = logging.getLogger("notes_cli")
 
@@ -33,6 +34,8 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
+        # Initialize vector search for the connection
+        conn.execute(f"SELECT vector_init('notes', 'embedding', 'dimension={EMBEDDING_DIMENSION}')")
         return conn
 
     def add_note(self, content, embedding, tags=None):
@@ -68,14 +71,12 @@ class Database:
             cursor = conn.cursor()
             import struct
             query_blob = struct.pack(f"{len(query_embedding)}f", *query_embedding)
-            
-            # Based on the function list, vec_distance_l2 is the correct function for L2 distance
+
             sql = """
-                SELECT id, content, tags, 
-                       vec_distance_l2(embedding, ?) as distance
-                FROM notes
-                ORDER BY distance ASC
-                LIMIT ?
+                SELECT n.id, n.content, n.tags, v.distance
+                FROM notes AS n
+                JOIN vector_full_scan('notes', 'embedding', ?, ?) AS v
+                ON n.id = v.rowid
             """
             logger.info(f"Executing SQL: {sql} with params: (<blob>, {limit})")
             cursor.execute(sql, (query_blob, limit))

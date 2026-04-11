@@ -45,7 +45,10 @@ async def main():
                     results = manager.find_notes(arg)
                     print("\n--- Vector Search Results ---")
                     for r in results:
-                        print(f"ID {r[0]}: {r[1]} (Tags: {r[2]})")
+                        # r[0]: id, r[1]: content, r[2]: tags, r[3]: distance
+                        dist = r[3] if len(r) > 3 else "N/A"
+                        dist_str = f"{dist:.4f}" if isinstance(dist, (int, float)) else dist
+                        print(f"ID {r[0]}: {r[1]} (Tags: {r[2]}) [Dist: {dist_str}]")
                     print("-----------------------------\n")
                     
                 elif cmd == "findai":

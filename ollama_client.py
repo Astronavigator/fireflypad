@@ -1,7 +1,8 @@
 import ollama
+from config import EMBEDDING_MODEL, AI_MODEL
 
 class OllamaClient:
-    def __init__(self, embed_model="nomic-embed-text:latest", ai_model="kimi-k2.5:cloud"):
+    def __init__(self, embed_model=EMBEDDING_MODEL, ai_model=AI_MODEL):
         self.embed_model = embed_model
         self.ai_model = ai_model
 
