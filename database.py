@@ -19,13 +19,19 @@ class Database:
     def setup(self, conn):
         cursor = conn.cursor()
         logger.info("Setting up database tables...")
+        # Main notes table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS notes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 content TEXT NOT NULL,
                 tags TEXT,
-                embedding BLOB,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Virtual table for vector search (sqlite-vec)
+        cursor.execute(f"""
+            CREATE VIRTUAL TABLE IF NOT EXISTS vec_notes USING vec0(
+                embedding float[{EMBEDDING_DIMENSION}]
             )
         """)
         conn.commit()
@@ -34,8 +40,6 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
-        # Initialize vector search for the connection
-        conn.execute(f"SELECT vector_init('notes', 'embedding', 'dimension={EMBEDDING_DIMENSION}')")
         return conn
 
     def add_note(self, content, embedding, tags=None):
@@ -43,14 +47,22 @@ class Database:
         try:
             cursor = conn.cursor()
             tags_str = tags if isinstance(tags, str) else json.dumps(tags)
-            import struct
-            embedding_blob = struct.pack(f"{len(embedding)}f", *embedding)
-            
-            sql = "INSERT INTO notes (content, tags, embedding) VALUES (?, ?, ?)"
-            logger.info(f"Executing SQL: {sql} with params: ({content}, {tags_str}, <blob>)")
-            cursor.execute(sql, (content, tags_str, embedding_blob))
+
+            # Insert into main notes table
+            sql = "INSERT INTO notes (content, tags) VALUES (?, ?)"
+            logger.info(f"Executing SQL: {sql} with params: ({content}, {tags_str})")
+            cursor.execute(sql, (content, tags_str))
+            note_id = cursor.lastrowid
+
+            # Insert embedding into virtual table (sqlite-vec format: JSON array string)
+            embedding_json = json.dumps(embedding)
+            cursor.execute(
+                "INSERT INTO vec_notes(rowid, embedding) VALUES (?, ?)",
+                (note_id, embedding_json)
+            )
+
             conn.commit()
-            return cursor.lastrowid
+            return note_id
         finally:
             conn.close()
 
@@ -69,17 +81,18 @@ class Database:
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
-            import struct
-            query_blob = struct.pack(f"{len(query_embedding)}f", *query_embedding)
+            # sqlite-vec format: JSON array string for query
+            query_json = json.dumps(query_embedding)
 
             sql = """
                 SELECT n.id, n.content, n.tags, v.distance
-                FROM notes AS n
-                JOIN vector_full_scan('notes', 'embedding', ?, ?) AS v
-                ON n.id = v.rowid
+                FROM vec_notes AS v
+                JOIN notes AS n ON n.id = v.rowid
+                WHERE v.embedding MATCH ? AND k = ?
+                ORDER BY v.distance ASC
             """
-            logger.info(f"Executing SQL: {sql} with params: (<blob>, {limit})")
-            cursor.execute(sql, (query_blob, limit))
+            logger.info(f"Executing SQL: {sql} with params: (<embedding>, {limit})")
+            cursor.execute(sql, (query_json, limit))
             return cursor.fetchall()
         finally:
             conn.close()
@@ -92,5 +105,18 @@ class Database:
             logger.info(f"Executing SQL: {sql} with params: ({note_id},)")
             cursor.execute(sql, (note_id,))
             return cursor.fetchone()
+        finally:
+            conn.close()
+
+    def delete_note(self, note_id):
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            # Delete from virtual table first
+            cursor.execute("DELETE FROM vec_notes WHERE rowid = ?", (note_id,))
+            # Delete from main table
+            cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+            conn.commit()
+            return cursor.rowcount > 0
         finally:
             conn.close()
