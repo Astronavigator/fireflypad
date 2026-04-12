@@ -4,9 +4,38 @@ from ollama_client import OllamaClient
 from config import EMBEDDING_MODEL
 from menu import menu
 
+# Test set: (Text 1, Text 2, Relation)
+test_cases = [
+    # Strong / Synonyms
+    ("Как приготовить пиццу", "Рецепт приготовления пиццы", "Strong"),
+    ("Инструкция по установке Linux", "Как установить Линукс на компьютер", "Strong"),
+    ("Вася", "Телефон Васи +123457674", "Strong"),
+    ("Телефон Васи", "Телефон Васи +123457674", "Strong"),
+    ("Номер телефона", "Телефон Васи +123457674", "Strong"),
+    ("Кот сидит на коврике", "Кошка находится на коврике", "Synonym"),
+
+    # Long variations of "Strong"
+    ("Как приготовить классическую итальянскую пиццу в домашних условиях с использованием традиционной печи", "Пошаговое руководство по приготовлению настоящей пиццы из Италии с правильным тестом и начинкой", "Strong"),
+    ("Linux", "Операционная система Линукс", "Strong"),
+
+    # Thematically Related (Weak)
+    ("Рецепт пиццы", "Итальянская паста", "Related"),
+    ("Программирование на Python", "Разработка на JavaScript", "Related"),
+    ("Я люблю готовить еду", "Вчера я купил новую сковороду и решил попробовать приготовить что-то необычное на ужин", "Related"),
+    ("Python", "pip install package", "Related"),
+    ("Вася", "Маша", "Somewhat"),
+
+    # Unrelated
+    ("Рецепт пиццы", "Квантовая физика и черные дыры", "Unrelated"),
+    ("Как установить Linux", "История Древнего Рима", "Unrelated"),
+    ("Погода в Москве", "Свойства золотого сечения", "Unrelated"),
+    ("Краткий ответ", "Это очень длинное предложение, которое описывает совершенно разные вещи, чтобы проверить, как модель справляется с разным объемом текста в одном запросе", "Unrelated"),
+]
+
 # Define a list of popular embedding models for the menu
 # These are common ones from the Ollama library
 model_options = {
+    "test_all": "Test all models",
     "nomic-embed-text:latest": "Nomic Embed Text (High Quality)",
     "mxbai-embed-large:latest": "mxbai Embed Large",
     "all-minilm:latest": "All MiniLM L6",
@@ -107,6 +136,13 @@ class EmbeddingResearcher:
 
         Returns dict with detailed metrics and overall score.
         """
+        metrics = self._calculate_aggregate_score_internal(results)
+        metrics['total_embedding_time'] = self.total_embedding_time
+        metrics['embedding_call_count'] = self.embedding_call_count
+        return metrics
+
+
+    def _calculate_aggregate_score_internal(self, results):
         # Define relation weights (expected semantic closeness, 1.0 = identical)
         relation_weights = {
             'Strong': 1.0,
@@ -303,6 +339,90 @@ class EmbeddingResearcher:
         print(f"Min distance for unrelated: {min_neg:.4f}")
         print(f"Suggested L2 Threshold: { (max_pos + min_neg) / 2:.4f}")
 
+def run_model_tests(model_name, test_cases):
+    """
+    Runs all tests for a single model and returns metrics.
+    """
+    researcher = EmbeddingResearcher(model_name)
+    
+    unique_texts = set()
+    for t1, t2, _ in test_cases:
+        unique_texts.add(t1)
+        unique_texts.add(t2)
+    
+    results = researcher.run_pairwise_test(test_cases)
+    metrics = researcher.calculate_aggregate_score(results)
+    
+    if not metrics:
+        return None
+    
+    metrics['model'] = model_name
+    metrics['texts_processed'] = list(unique_texts)
+    researcher.print_speed_report(unique_texts)
+    
+    return metrics
+
+
+def print_comparison_table(all_results):
+    """
+    Prints a comparison table for all tested models.
+    """
+    if not all_results:
+        return
+    
+    print("\n" + "=" * 120)
+    print("COMPARISON TABLE - ALL MODELS")
+    print("=" * 120)
+    
+    header = f"{'Model':<35} | {'Score':>6} | {'Separation':>10} | {'Ranking':>8} | {'Discrim.':>8} | {'Calib.':>6} | {'Overlap':>8} | {'Avg Time':>10}"
+    print(header)
+    print("-" * 120)
+    
+    for r in all_results:
+        model = r['model'][:33]
+        score = r['total_score']
+        sep = r['separation']
+        rank = r['ranking']
+        disc = r['discrimination']
+        calib = r['calibration_bonus']
+        overlap = r['overlap_penalty']
+        
+        total_time = r.get('total_embedding_time', 0)
+        avg_time_ms = (total_time / r.get('embedding_call_count', 1)) * 1000 if r.get('embedding_call_count', 1) > 0 else 0
+        
+        print(f"{model:<35} | {score:>6.1f} | {sep:>10.1f} | {rank:>8.1f} | {disc:>8.1f} | {calib:>6.1f} | {overlap:>8} | {avg_time_ms:>9.1f}ms")
+    
+    print("=" * 120)
+    
+    best = max(all_results, key=lambda x: x['total_score'])
+    print(f"\nBest model: {best['model']} (Score: {best['total_score']:.1f}/100)")
+
+
+def test_all_models(test_cases):
+    """
+    Tests all models and returns comparison results.
+    """
+    all_results = []
+    models_to_test = [k for k in model_options.keys() if k != "test_all"]
+    
+    print(f"\n=== Testing {len(models_to_test)} models ===\n")
+    
+    for i, model in enumerate(models_to_test, 1):
+        print(f"\n[{i}/{len(models_to_test)}] Testing: {model}")
+        print("-" * 50)
+        
+        metrics = run_model_tests(model, test_cases)
+        
+        if metrics:
+            all_results.append(metrics)
+            print(f"  Score: {metrics['total_score']:.1f}/100")
+        else:
+            print(f"  FAILED")
+    
+    print_comparison_table(all_results)
+    return all_results
+
+
 def main():
 
     print("\n--- Select Embedding Model for Research ---")
@@ -312,35 +432,11 @@ def main():
         print("No model selected. Exiting.")
         return
 
+    if selected_model == "test_all":
+        test_all_models(test_cases)
+        return
+
     researcher = EmbeddingResearcher(selected_model)
-
-    # Test set: (Text 1, Text 2, Relation)
-    test_cases = [
-        # Strong / Synonyms
-        ("Как приготовить пиццу", "Рецепт приготовления пиццы", "Strong"),
-        ("Инструкция по установке Linux", "Как установить Линукс на компьютер", "Strong"),
-        ("Вася", "Телефон Васи +123457674", "Strong"),
-        ("Телефон Васи", "Телефон Васи +123457674", "Strong"),
-        ("Номер телефона", "Телефон Васи +123457674", "Strong"),
-        ("Кот сидит на коврике", "Кошка находится на коврике", "Synonym"),
-
-        # Long variations of "Strong"
-        ("Как приготовить классическую итальянскую пиццу в домашних условиях с использованием традиционной печи", "Пошаговое руководство по приготовлению настоящей пиццы из Италии с правильным тестом и начинкой", "Strong"),
-        ("Linux", "Операционная система Линукс", "Strong"),
-
-        # Thematically Related (Weak)
-        ("Рецепт пиццы", "Итальянская паста", "Related"),
-        ("Программирование на Python", "Разработка на JavaScript", "Related"),
-        ("Я люблю готовить еду", "Вчера я купил новую сковороду и решил попробовать приготовить что-то необычное на ужин", "Related"),
-        ("Python", "pip install package", "Related"),
-        ("Вася", "Маша", "Somewhat"),
-
-        # Unrelated
-        ("Рецепт пиццы", "Квантовая физика и черные дыры", "Unrelated"),
-        ("Как установить Linux", "История Древнего Рима", "Unrelated"),
-        ("Погода в Москве", "Свойства золотого сечения", "Unrelated"),
-        ("Краткий ответ", "Это очень длинное предложение, которое описывает совершенно разные вещи, чтобы проверить, как модель справляется с разным объемом текста в одном запросе", "Unrelated"),
-    ]
 
     print(f"\nUsing model: {selected_model}")
     researcher.analyze_vector_lengths(test_cases)
