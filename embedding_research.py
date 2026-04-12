@@ -13,7 +13,10 @@ model_options = {
     "snowflake-arctic-embed:latest": "Snowflake Arctic Embed",
     "bge-m3:latest": "BGE-M3 (Multilingual)",
     "embeddinggemma:300m": "embeddinggemma 300m",
-    "qwen3-embedding:0.6b": "qwen3-embedding 0.6b"
+    "embeddinggemma:300m-qat-q4_0": "embeddinggemma:300m-qat-q4_0",
+    "qwen3-embedding:0.6b-fp16": "qwen3-embedding:0.6b-fp16",
+    "qwen3-embedding:0.6b": "qwen3-embedding 0.6b",
+    "my-qwen-q4": "my-qwen-q4"
 }
 
 
