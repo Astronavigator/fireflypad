@@ -1,4 +1,4 @@
 # Model Configuration
-EMBEDDING_MODEL = "qwen3-embedding:0.6b"
+EMBEDDING_MODEL = "my-qwen-q4"
 AI_MODEL = "kimi-k2.5:cloud"
-EMBEDDING_DIMENSION = 768
+EMBEDDING_DIMENSION = 1024
