@@ -21,12 +21,14 @@ class NotepadApp(App):
     
     CSS = """
     .main-panel {
-        height: 80%;
+        width: 70%;
+        height: 1fr;
         border: solid $primary;
     }
     
     .log-panel {
-        height: 20%;
+        width: 30%;
+        height: 1fr;
         border: solid $secondary;
     }
     
@@ -53,6 +55,7 @@ class NotepadApp(App):
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit"),
         Binding("ctrl+l", "clear_log", "Clear Log"),
+        Binding("ctrl+k", "clear_content", "Clear Content"),
         Binding("ctrl+h", "show_help", "Help"),
     ]
     
@@ -63,13 +66,14 @@ class NotepadApp(App):
         self.manager = NoteManager()
         self.chat_history = []
         self.title = "AI Notepad TUI"
+        self.content_history = []
     
     def compose(self) -> ComposeResult:
         """Create the app layout"""
         yield Header()
         
-        with Vertical():
-            # Main panel - Notepad interface
+        with Horizontal():
+            # Main panel - Notepad interface (left)
             with Vertical(classes="main-panel"):
                 yield Static("=== AI NOTEPAD ===", id="header")
                 with ScrollableContainer(classes="content-area"):
@@ -81,7 +85,7 @@ class NotepadApp(App):
                 # Input area
                 yield Input(placeholder="Enter note or command...", id="user-input")
             
-            # Log panel - Operation logs
+            # Log panel - Operation logs (right)
             with Vertical(classes="log-panel"):
                 yield Static("=== LOG ===", id="log-header")
                 yield Log(id="log")
@@ -102,9 +106,17 @@ class NotepadApp(App):
         log_widget.write_line(f"[{timestamp}] {message}")
     
     def update_content_display(self, content: str) -> None:
-        """Update the main content display area"""
+        """Add content to the main content display area"""
         content_widget = self.query_one("#content-display", Static)
-        content_widget.update(content)
+        self.content_history.append(content)
+        
+        # Keep only last 50 entries to prevent memory issues
+        if len(self.content_history) > 50:
+            self.content_history = self.content_history[-50:]
+        
+        # Display all content with separators
+        full_content = "\n".join(["─" * 50] + self.content_history)
+        content_widget.update(full_content)
     
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle user input submission"""
@@ -208,6 +220,13 @@ class NotepadApp(App):
         log_widget.clear()
         self.log_message("Log cleared")
     
+    def action_clear_content(self) -> None:
+        """Clear the content panel"""
+        self.content_history.clear()
+        content_widget = self.query_one("#content-display", Static)
+        content_widget.update("")
+        self.log_message("Content cleared")
+    
     def action_show_help(self) -> None:
         """Show help information"""
         help_text = """
@@ -223,6 +242,7 @@ Commands:
 Keybindings:
   Ctrl+C          - Quit
   Ctrl+L          - Clear log
+  Ctrl+K          - Clear content
   Ctrl+H          - Show this help
 
 The log panel shows all operations and status updates.
