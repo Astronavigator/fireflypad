@@ -1,7 +1,10 @@
+from http.client import responses
 import ollama
 from ollama import AsyncClient
 from config import EMBEDDING_MODEL, AI_MODEL
 import asyncio
+import re
+import json
 
 class OllamaClient:
     def __init__(self, embed_model=EMBEDDING_MODEL, ai_model=AI_MODEL):
@@ -12,6 +15,14 @@ class OllamaClient:
     def get_embedding(self, text):
         response = ollama.embeddings(model=self.embed_model, prompt=text)
         return response['embedding']
+
+    def ask(self, prompt, think=False):
+        response = ollama.chat(
+            model=self.ai_model,
+            messages=[{'role': 'user', 'content': prompt}],
+            think=think
+        )
+        return response['message']['content']
 
     def chat(self, prompt, history=None):
         messages = []
@@ -54,6 +65,33 @@ class OllamaClient:
                     log_callback(chunk['message']['content'], is_chunk=True)
                 yield chunk['message']['content']
 
-    def analyze_note(self, text):
-        prompt = f"Analyze the following note and provide a short list of comma-separated tags that best describe its content. Return ONLY the tags.\n\nNote: {text}"
-        return self.chat(prompt)
+
+    def extract_tag(self, text: str, tag: str):
+        """
+        Извлекает содержимое тега из текста
+        """
+        
+        pattern = f'<{tag}>(.*?)</{tag}>'
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return None
+
+    def analyze_note(self, text) -> dict:
+        prompt = "Проанализируй эту заметку и " + \
+        "1. Составь список потенциальных вопросов, на которые она отвечает (вопросов которые будет задвать пользователь rag системе)" + \
+        "2. Составь список тэгов, к которым можно отнести эту заметку" + \
+        "Ответ выдай в формате : <result>" + \
+        '{"questions": ["вопрос1","вопрос2",...], "tags": ["тег1","тег2",...] } </result>' + \
+        "<note>" + text + "</note>"
+
+        resp = self.ask(prompt)
+
+        print(resp)
+
+        json_str = self.extract_tag(resp, "result")
+        if json_str:
+            res = json.loads(json_str)
+        else:
+            res = {"questions": [], "tags": []}
+        return res
