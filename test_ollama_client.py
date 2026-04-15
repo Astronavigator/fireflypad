@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock, patch, AsyncMock
 import json
 import asyncio
-from ollama_client import OllamaClient
+from ollama_client import OllamaClient, AnalyzeNoteResult
 
 def async_test(func):
     """Декоратор для преобразования асинхронных тестов в синхронные"""
@@ -46,17 +46,13 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
                 result = await self.client.analyze_note("Python is a programming language with lists and data structures.")
                 
                 # Check structure
-                self.assertIsInstance(result, dict)
-                self.assertIn('questions', result)
-                self.assertIn('tags', result)
-                
-                # Check types
-                self.assertIsInstance(result['questions'], list)
-                self.assertIsInstance(result['tags'], list)
+                self.assertIsInstance(result, AnalyzeNoteResult)
+                self.assertIsInstance(result.questions, list)
+                self.assertIsInstance(result.tags, list)
                 
                 # Check content
-                self.assertEqual(result['questions'], ["What is Python?", "How to use lists?"])
-                self.assertEqual(result['tags'], ["programming", "tutorial"])
+                self.assertEqual(result.questions, ["What is Python?", "How to use lists?"])
+                self.assertEqual(result.tags, ["programming", "tutorial"])
     
     @async_test
     async def test_analyze_note_structure_empty_json(self):
@@ -68,13 +64,13 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
                 result = await self.client.analyze_note("Some simple text.")
                 
                 # Check structure
-                self.assertIsInstance(result, dict)
-                self.assertIn('questions', result)
-                self.assertIn('tags', result)
+                self.assertIsInstance(result, AnalyzeNoteResult)
+                self.assertIsInstance(result.questions, list)
+                self.assertIsInstance(result.tags, list)
                 
                 # Check that all lists are empty
-                self.assertEqual(result['questions'], [])
-                self.assertEqual(result['tags'], [])
+                self.assertEqual(result.questions, [])
+                self.assertEqual(result.tags, [])
     
     @async_test
     async def test_analyze_note_extraction_failure(self):
@@ -84,13 +80,13 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
                 result = await self.client.analyze_note("Some text that won't be processed.")
                 
                 # Check structure
-                self.assertIsInstance(result, dict)
-                self.assertIn('questions', result)
-                self.assertIn('tags', result)
+                self.assertIsInstance(result, AnalyzeNoteResult)
+                self.assertIsInstance(result.questions, list)
+                self.assertIsInstance(result.tags, list)
                 
                 # Check that all lists are empty (fallback case)
-                self.assertEqual(result['questions'], [])
-                self.assertEqual(result['tags'], [])
+                self.assertEqual(result.questions, [])
+                self.assertEqual(result.tags, [])
     
     @async_test
     async def test_analyze_note_invalid_json(self):
@@ -121,11 +117,9 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
                         result = await self.client.analyze_note(text)
                         
                         # Always return correct structure regardless of input
-                        self.assertIsInstance(result, dict)
-                        self.assertIn('questions', result)
-                        self.assertIn('tags', result)
-                        self.assertIsInstance(result['questions'], list)
-                        self.assertIsInstance(result['tags'], list)
+                        self.assertIsInstance(result, AnalyzeNoteResult)
+                        self.assertIsInstance(result.questions, list)
+                        self.assertIsInstance(result.tags, list)
     
     @async_test
     async def test_analyze_note_prompt_construction(self):

@@ -1,7 +1,7 @@
 import unittest
 import time
 import asyncio
-from ollama_client import OllamaClient
+from ollama_client import AnalyzeNoteResult, OllamaClient
 import warnings
 
 def async_test(func):
@@ -42,27 +42,27 @@ class TestOllamaIntegration(unittest.TestCase):
         result = await self.client.analyze_note(text)
         
         # Check structure
-        self.assertIsInstance(result, dict)
-        self.assertIn('questions', result)
-        self.assertIn('tags', result)
+        self.assertIsInstance(result, AnalyzeNoteResult)
+        self.assertIsNotNone(result.questions)
+        self.assertIsNotNone(result.tags)
         
         # Check types
-        self.assertIsInstance(result['questions'], list)
-        self.assertIsInstance(result['tags'], list)
+        self.assertIsInstance(result.questions, list)
+        self.assertIsInstance(result.tags, list)
         
         # Check that lists are not empty (AI should generate content)
-        self.assertGreater(len(result['questions']), 0, "Questions list should not be empty")
-        self.assertGreater(len(result['tags']), 0, "Tags list should not be empty")
+        self.assertGreater(len(result.questions), 0, "Questions list should not be empty")
+        self.assertGreater(len(result.tags), 0, "Tags list should not be empty")
         
         # Check that content is relevant
         self.assertTrue(
-            any('python' in tag.lower() or 'programming' in tag.lower() for tag in result['tags']),
+            any('python' in tag.lower() or 'programming' in tag.lower() for tag in result.tags),
             "Tags should contain Python-related terms"
         )
         
         print(f"\nProgramming Content Analysis:")
-        print(f"Questions: {result['questions']}")
-        print(f"Tags: {result['tags']}")
+        print(f"Questions: {result.questions}")
+        print(f"Tags: {result.tags}")
 
     
     @async_test
@@ -73,17 +73,17 @@ class TestOllamaIntegration(unittest.TestCase):
         result = await self.client.analyze_note(text)
         
         # Check structure
-        self.assertIsInstance(result, dict)
-        self.assertIn('questions', result)
-        self.assertIn('tags', result)
+        self.assertIsInstance(result, AnalyzeNoteResult)
+        self.assertIsNotNone(result.questions)
+        self.assertIsNotNone(result.tags)
         
         # Check types
-        self.assertIsInstance(result['questions'], list)
-        self.assertIsInstance(result['tags'], list)
+        self.assertIsInstance(result.questions, list)
+        self.assertIsInstance(result.tags, list)
         
         # Check that lists are not empty
-        self.assertGreater(len(result['questions']), 0, "Questions list should not be empty")
-        self.assertGreater(len(result['tags']), 0, "Tags list should not be empty")
+        self.assertGreater(len(result.questions), 0, "Questions list should not be empty")
+        self.assertGreater(len(result.tags), 0, "Tags list should not be empty")
         
         # Check that content is relevant
         # self.assertTrue(
@@ -93,8 +93,8 @@ class TestOllamaIntegration(unittest.TestCase):
         # )
     
         print(f"\nRecipe Content Analysis:")
-        print(f"Questions: {result['questions']}")
-        print(f"Tags: {result['tags']}")
+        print(f"Questions: {result.questions}")
+        print(f"Tags: {result.tags}")
 
     
     @async_test
@@ -108,17 +108,17 @@ class TestOllamaIntegration(unittest.TestCase):
         print(result)
         
         # Check structure
-        self.assertIsInstance(result, dict)
-        self.assertIn('questions', result)
-        self.assertIn('tags', result)
+        self.assertIsInstance(result, AnalyzeNoteResult)
+        self.assertIsNotNone(result.questions)
+        self.assertIsNotNone(result.tags)
         
         # Check types
-        self.assertIsInstance(result['questions'], list)
-        self.assertIsInstance(result['tags'], list)
+        self.assertIsInstance(result.questions, list)
+        self.assertIsInstance(result.tags, list)
         
         # Check that lists are not empty
-        self.assertGreater(len(result['questions']), 0, "Questions list should not be empty")
-        self.assertGreater(len(result['tags']), 0, "Tags list should not be empty")
+        self.assertGreater(len(result.questions), 0, "Questions list should not be empty")
+        self.assertGreater(len(result.tags), 0, "Tags list should not be empty")
         
         # # Check that content is relevant
         # self.assertTrue(
@@ -128,8 +128,8 @@ class TestOllamaIntegration(unittest.TestCase):
         # )
     
         print(f"\nMeeting Content Analysis:")
-        print(f"Questions: {result['questions']}")
-        print(f"Tags: {result['tags']}")
+        print(f"Questions: {result.questions}")
+        print(f"Tags: {result.tags}")
     
     @async_test
     async def test_analyze_note_real_ai_short_content(self):
@@ -140,17 +140,17 @@ class TestOllamaIntegration(unittest.TestCase):
         result = await self.client.analyze_note(text)
     
         # Check structure (should still work with short content)
-        self.assertIsInstance(result, dict)
-        self.assertIn('questions', result)
-        self.assertIn('tags', result)
+        self.assertIsInstance(result, AnalyzeNoteResult)
+        self.assertIsNotNone(result.questions)
+        self.assertIsNotNone(result.tags)
         
         # Check types
-        self.assertIsInstance(result['questions'], list)
-        self.assertIsInstance(result['tags'], list)
+        self.assertIsInstance(result.questions, list)
+        self.assertIsInstance(result.tags, list)
     
         print(f"\nShort Content Analysis:")
-        print(f"Questions: {result['questions']}")
-        print(f"Tags: {result['tags']}")
+        print(f"Questions: {result.questions}")
+        print(f"Tags: {result.tags}")
     
     @async_test
     async def test_analyze_note_real_ai_technical_content(self):
@@ -160,17 +160,17 @@ class TestOllamaIntegration(unittest.TestCase):
         result = await self.client.analyze_note(text)
     
         # Check structure
-        self.assertIsInstance(result, dict)
-        self.assertIn('questions', result)
-        self.assertIn('tags', result)
+        self.assertIsInstance(result, AnalyzeNoteResult)
+        self.assertIsNotNone(result.questions)
+        self.assertIsNotNone(result.tags)
         
         # Check types
-        self.assertIsInstance(result['questions'], list)
-        self.assertIsInstance(result['tags'], list)
+        self.assertIsInstance(result.questions, list)
+        self.assertIsInstance(result.tags, list)
         
         # Check that lists are not empty
-        self.assertGreater(len(result['questions']), 0, "Questions list should not be empty")
-        self.assertGreater(len(result['tags']), 0, "Tags list should not be empty")
+        self.assertGreater(len(result.questions), 0, "Questions list should not be empty")
+        self.assertGreater(len(result.tags), 0, "Tags list should not be empty")
         
         # Check that content is relevant
         # self.assertTrue(
@@ -180,8 +180,8 @@ class TestOllamaIntegration(unittest.TestCase):
         # )
     
         print(f"\nTechnical Content Analysis:")
-        print(f"Questions: {result['questions']}")
-        print(f"Tags: {result['tags']}")
+        print(f"Questions: {result.questions}")
+        print(f"Tags: {result.tags}")
 
 
 if __name__ == '__main__':

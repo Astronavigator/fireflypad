@@ -265,7 +265,7 @@ class NotepadApp(App):
         self.update_content_display(ai_response)
         
         full_response = ""
-        async for chunk in self.manager.ai_chat_stream(prompt, self.chat_history, self._ai_log_callback):
+        async for chunk in self.manager.ai_chat_stream(prompt, self.chat_history):
             full_response += chunk
             # Update content display with streaming response (replace mode)
             ai_response = f"AI: {full_response}"

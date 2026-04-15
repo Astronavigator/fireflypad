@@ -5,6 +5,87 @@ from config import EMBEDDING_MODEL, AI_MODEL
 import asyncio
 import re
 import json
+import functools
+import time
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass
+
+
+def retry_on_exception(max_attempts: int = 3, delay: float = 0.1):
+    """
+    Декоратор для повторного вызова функции при возникновении исключений.
+    
+    Args:
+        max_attempts: Максимальное количество попыток (по умолчанию 3)
+        delay: Задержка между попытками в секундах (по умолчанию 0.1)
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_attempts - 1:
+                        time.sleep(delay)
+                    continue
+            
+            raise last_exception
+        return wrapper
+    return decorator
+
+
+def async_retry_on_exception(max_attempts: int = 3, delay: float = 0.1):
+    """
+    Асинхронный декоратор для повторного вызова функции при возникновении исключений.
+    
+    Args:
+        max_attempts: Максимальное количество попыток (по умолчанию 3)
+        delay: Задержка между попытками в секундах (по умолчанию 0.1)
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+            
+            for attempt in range(max_attempts):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_attempts - 1:
+                        await asyncio.sleep(delay)
+                    continue
+            
+            raise last_exception
+        return wrapper
+    return decorator
+
+
+@dataclass
+class AnalyzeNoteResult:
+    """Result of note analysis containing questions and tags"""
+    questions: List[str]
+    tags: List[str]
+    
+    def to_dict(self) -> Dict[str, List[str]]:
+        """Convert to dictionary format for backward compatibility"""
+        return {
+            "questions": self.questions,
+            "tags": self.tags
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'AnalyzeNoteResult':
+        """Create from dictionary format"""
+        return cls(
+            questions=data.get("questions", []),
+            tags=data.get("tags", [])
+        )
+
 
 class OllamaClient:
     def __init__(self, embed_model: str=EMBEDDING_MODEL, ai_model: str=AI_MODEL):
@@ -84,7 +165,8 @@ class OllamaClient:
             return match.group(1).strip()
         return None
 
-    async def analyze_note(self, text: str, log_callback:callable=None) -> dict:
+    @async_retry_on_exception(max_attempts=3, delay=0.5)
+    async def analyze_note(self, text: str, log_callback:callable=None) -> AnalyzeNoteResult:
         prompt = "Проанализируй эту заметку и " + \
         "1. Составь список потенциальных вопросов, на которые она отвечает (вопросов которые будет задвать пользователь rag системе)" + \
         "2. Составь список тэгов, к которым можно отнести эту заметку" + \
@@ -94,14 +176,12 @@ class OllamaClient:
 
         resp = await self.ask_async(prompt, log_callback=log_callback)
 
-        print(resp)
-
         json_str = self.extract_tag(resp, "result")
         if json_str:
-            res = json.loads(json_str)
+            data = json.loads(json_str)
         else:
-            res = {"questions": [], "tags": []}
-        return res
+            data = {"questions": [], "tags": []}
+        return AnalyzeNoteResult.from_dict(data)
 
 
 
