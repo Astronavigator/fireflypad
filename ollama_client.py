@@ -102,3 +102,10 @@ class OllamaClient:
         else:
             res = {"questions": [], "tags": []}
         return res
+
+    async def close(self):
+        """Закрыть асинхронные соединения"""
+        if hasattr(self.async_client, '_client') and hasattr(self.async_client._client, 'close'):
+            await self.async_client._client.close()
+
+    

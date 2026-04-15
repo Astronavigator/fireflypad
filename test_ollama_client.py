@@ -4,6 +4,30 @@ import json
 import asyncio
 from ollama_client import OllamaClient
 
+def async_test(func):
+    """Декоратор для преобразования асинхронных тестов в синхронные"""
+    async def async_wrapper(self, *args, **kwargs):
+        try:
+            return await func(self, *args, **kwargs)
+        finally:
+            # Закрываем соединения если есть метод close
+            if hasattr(self, 'client') and hasattr(self.client, 'close'):
+                await self.client.close()
+    
+    def wrapper(self, *args, **kwargs):
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(async_wrapper(self, *args, **kwargs))
+        finally:
+            # Закрываем все pending tasks
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.close()
+    return wrapper
+
 
 class TestOllamaClientAnalyzeNote(unittest.TestCase):
     
@@ -11,6 +35,7 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
         """Set up test fixtures before each test method."""
         self.client = OllamaClient()
     
+    @async_test
     async def test_analyze_note_structure_success(self):
         """Test that analyze_note returns correct structure when extraction succeeds."""
         # Mock response from extract_tag
@@ -33,6 +58,7 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
                 self.assertEqual(result['questions'], ["What is Python?", "How to use lists?"])
                 self.assertEqual(result['tags'], ["programming", "tutorial"])
     
+    @async_test
     async def test_analyze_note_structure_empty_json(self):
         """Test that analyze_note returns empty structure when JSON is empty."""
         mock_json_response = '{"questions": [], "tags": []}'
@@ -50,6 +76,7 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
                 self.assertEqual(result['questions'], [])
                 self.assertEqual(result['tags'], [])
     
+    @async_test
     async def test_analyze_note_extraction_failure(self):
         """Test that analyze_note returns empty structure when extract_tag fails."""
         with patch.object(self.client, 'ask_async', new_callable=AsyncMock, return_value="Some response without proper tags"):
@@ -65,6 +92,7 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
                 self.assertEqual(result['questions'], [])
                 self.assertEqual(result['tags'], [])
     
+    @async_test
     async def test_analyze_note_invalid_json(self):
         """Test that analyze_note handles invalid JSON gracefully."""
         mock_invalid_json = '{"questions": ["test"], "tags": ["test"], invalid json'
@@ -74,6 +102,7 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
                 with self.assertRaises(json.JSONDecodeError):
                     await self.client.analyze_note("Some text.")
     
+    @async_test
     async def test_analyze_note_with_various_content_types(self):
         """Test analyze_note with different types of input content."""
         test_cases = [
@@ -98,6 +127,7 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
                         self.assertIsInstance(result['questions'], list)
                         self.assertIsInstance(result['tags'], list)
     
+    @async_test
     async def test_analyze_note_prompt_construction(self):
         """Test that the prompt is constructed correctly with the note text."""
         test_text = "This is a test note about programming."
@@ -128,39 +158,4 @@ class TestOllamaClientAnalyzeNote(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    # Run async tests
-    def run_async_test(test_case):
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(test_case)
-        finally:
-            loop.close()
-    
-    # Create test suite with async support
-    suite = unittest.TestSuite()
-    
-    # Add all async test methods with proper test instance creation
-    async_test_methods = [
-        'test_analyze_note_structure_success',
-        'test_analyze_note_structure_empty_json',
-        'test_analyze_note_extraction_failure',
-        'test_analyze_note_invalid_json',
-        'test_analyze_note_with_various_content_types',
-        'test_analyze_note_prompt_construction'
-    ]
-    
-    for test_method_name in async_test_methods:
-        # Create a fresh test instance for each test
-        test_instance = TestOllamaClientAnalyzeNote()
-        test_instance.setUp()  # Initialize the test instance
-        
-        # Get the async test method
-        test_method = getattr(test_instance, test_method_name)
-        
-        suite.addTest(unittest.FunctionTestCase(
-            lambda: run_async_test(test_method()),
-            description=test_method_name
-        ))
-    
-    runner = unittest.TextTestRunner()
-    runner.run(suite)
+    unittest.main()

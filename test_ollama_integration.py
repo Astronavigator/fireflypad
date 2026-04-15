@@ -4,6 +4,30 @@ import time
 import asyncio
 from ollama_client import OllamaClient
 
+def async_test(func):
+    """Декоратор для преобразования асинхронных тестов в синхронные"""
+    async def async_wrapper(self, *args, **kwargs):
+        try:
+            return await func(self, *args, **kwargs)
+        finally:
+            # Закрываем соединения если есть метод close
+            if hasattr(self, 'client') and hasattr(self.client, 'close'):
+                await self.client.close()
+    
+    def wrapper(self, *args, **kwargs):
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(async_wrapper(self, *args, **kwargs))
+        finally:
+            # Закрываем все pending tasks
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.close()
+    return wrapper
+
 
 class TestOllamaIntegration(unittest.TestCase):
     
@@ -13,6 +37,7 @@ class TestOllamaIntegration(unittest.TestCase):
         # Add a small delay between tests to avoid overwhelming the AI model
         time.sleep(1)
     
+    @async_test
     async def test_analyze_note_real_ai_programming_content(self):
         """Test analyze_note with real AI for programming-related content."""
         text = "Python is a high-level programming language with dynamic typing. It supports multiple programming paradigms including procedural, object-oriented, and functional programming."
@@ -42,6 +67,7 @@ class TestOllamaIntegration(unittest.TestCase):
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
     
+    @async_test
     async def test_analyze_note_real_ai_recipe_content(self):
         """Test analyze_note with real AI for recipe-related content."""
         text = "To make chocolate chip cookies: mix 2 cups flour, 1 cup butter, 3/4 cup sugar, 2 eggs, 1 tsp vanilla. Bake at 375°F for 12 minutes."
@@ -72,6 +98,7 @@ class TestOllamaIntegration(unittest.TestCase):
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
     
+    @async_test
     async def test_analyze_note_real_ai_meeting_content(self):
         """Test analyze_note with real AI for meeting-related content."""
         text = "Team meeting scheduled for next Monday at 2 PM. Agenda: project timeline review, budget discussion, task assignments for Q4. Please prepare status reports."        
@@ -104,6 +131,7 @@ class TestOllamaIntegration(unittest.TestCase):
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
     
+    @async_test
     async def test_analyze_note_real_ai_short_content(self):
         """Test analyze_note with real AI for very short content."""
         text = "Buy milk and eggs"
@@ -123,6 +151,7 @@ class TestOllamaIntegration(unittest.TestCase):
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
     
+    @async_test
     async def test_analyze_note_real_ai_technical_content(self):
         """Test analyze_note with real AI for technical documentation."""
         text = "Docker container running nginx on port 8080. Use docker-compose.yml for multi-service deployment. Environment variables configured in .env file."
@@ -153,6 +182,7 @@ class TestOllamaIntegration(unittest.TestCase):
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
     
+    @async_test
     async def test_extract_tag_real_ai(self):
         """Test extract_tag function with real AI response simulation."""
         # Simulate AI response with tags
@@ -182,6 +212,7 @@ class TestOllamaIntegration(unittest.TestCase):
         print(f"Extracted: {result}")
         print(f"Parsed: {parsed}")
     
+    @async_test
     async def test_extract_tag_not_found(self):
         """Test extract_tag when tag is not found."""
         text = "This text has no special tags in it."
@@ -195,48 +226,5 @@ class TestOllamaIntegration(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    # Run async tests with more verbose output to see the print statements
-    def run_async_test(test_case):
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(test_case)
-        finally:
-            loop.close()
-    
-    # Create test suite with async support
-    suite = unittest.TestSuite()
-    
-    # Add all async test methods with proper test instance creation
-    async_test_methods = [
-        'test_analyze_note_real_ai_programming_content',
-        'test_analyze_note_real_ai_recipe_content',
-        'test_analyze_note_real_ai_meeting_content',
-        'test_analyze_note_real_ai_short_content',
-        'test_analyze_note_real_ai_technical_content',
-        'test_extract_tag_real_ai',
-        'test_extract_tag_not_found'
-    ]
-    
-    for test_method_name in async_test_methods:
-        # Create a fresh test instance for each test
-        test_instance = TestOllamaIntegration()
-        test_instance.setUp()  # Initialize the test instance
-        
-        # Get the test method
-        test_method = getattr(test_instance, test_method_name)
-        
-        if asyncio.iscoroutinefunction(test_method):
-            # Async test method
-            suite.addTest(unittest.FunctionTestCase(
-                lambda: run_async_test(test_method()),
-                description=test_method_name
-            ))
-        else:
-            # Sync test method
-            suite.addTest(unittest.FunctionTestCase(
-                test_method,
-                description=test_method_name
-            ))
-    
-    runner = unittest.TextTestRunner(verbosity=2)
-    runner.run(suite)
+    # Run with more verbose output to see the print statements
+    unittest.main(verbosity=2)
