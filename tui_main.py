@@ -15,6 +15,10 @@ from textual.binding import Binding
 from textual.message import Message
 from manager import NoteManager
 
+async def fake_stream(self):
+    for i in range(10):
+        await asyncio.sleep(0.5) # Имитация ожидания
+        yield f"Токен {i} "
 
 class NotepadApp(App):
     """TUI Notepad App with split panels"""
@@ -30,6 +34,10 @@ class NotepadApp(App):
         width: 30%;
         height: 1fr;
         border: solid $secondary;
+    }
+
+    .log-content {
+      text-style: italic;
     }
     
     .input-area {
@@ -64,6 +72,7 @@ class NotepadApp(App):
     def __init__(self):
         super().__init__()
         self.manager = NoteManager()
+        self.manager.set_log_callback(self._ai_log_callback)
         self.chat_history = []
         self.title = "AI Notepad TUI"
         self.content_history = []
@@ -88,7 +97,8 @@ class NotepadApp(App):
             # Log panel - Operation logs (right)
             with Vertical(classes="log-panel"):
                 yield Static("=== LOG ===", id="log-header")
-                yield Log(id="log")
+                with ScrollableContainer(classes="log-content"):
+                    yield Static("", id="log")
         
         yield Footer()
     
@@ -99,16 +109,46 @@ class NotepadApp(App):
         input_widget = self.query_one("#user-input", Input)
         input_widget.focus()
     
-    def log_message(self, message: str) -> None:
+    def log_message(self, message: str, new_line: bool = True) -> None:
         """Add message to log panel"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        log_widget = self.query_one("#log", Log)
-        log_widget.write_line(f"[{timestamp}] {message}")
+        if new_line:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            log_widget = self.query_one("#log", Static)
+
+            #log_widget.write(f"[{timestamp}] {message}")
+            current_text = log_widget.renderable
+            log_widget.update(f"{current_text}\n[{timestamp}] {message}")
+        else:
+            log_widget = self.query_one("#log", Static)
+            #log_widget.write(message)
+            current_text = log_widget.renderable
+            log_widget.update(f"{current_text}{message}")
     
-    def update_content_display(self, content: str) -> None:
+    def _ai_log_callback(self, message: str, is_chunk: bool = False) -> None:
+        """Callback for AI operations logging"""
+        if is_chunk:
+            # For streaming chunks, log them directly to show AI thinking process
+            log_widget = self.query_one("#log", Static)
+            # Add chunks without overwhelming the log
+            if len(message.strip()) > 0:  # Only log non-empty chunks
+                current_text = log_widget.renderable
+                log_widget.update(f"{current_text}{message}")
+        else:
+            # For regular messages, use normal logging with timestamp
+            self.log_message(f"AI: {message}")
+    
+    def update_content_display(self, content: str, append: bool = True) -> None:
         """Add content to the main content display area"""
         content_widget = self.query_one("#content-display", Static)
-        self.content_history.append(content)
+        
+        if append:
+            self.content_history.append(content)
+        else:
+            # Replace last entry instead of appending
+            if self.content_history:
+                self.content_history[-1] = content
+            else:
+                self.content_history.append(content)
         
         # Keep only last 50 entries to prevent memory issues
         if len(self.content_history) > 50:
@@ -117,8 +157,24 @@ class NotepadApp(App):
         # Display all content with separators
         full_content = "\n".join(["─" * 50] + self.content_history)
         content_widget.update(full_content)
+        
+        # Auto-scroll to bottom
+        self.call_after_refresh(self._scroll_to_bottom)
     
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
+    def _scroll_to_bottom(self) -> None:
+        """Scroll the content area to the bottom"""
+        try:
+            # Get the scrollable container and scroll to end
+            scroll_container = self.query_one(".content-area", ScrollableContainer)
+            scroll_container.scroll_end(animate=False)
+        except Exception as e:
+            self.log_message(f"Scroll error: {e}")
+    
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle user input submission"""
+        self.run_worker(self.do_on_input_submitted(event), exclusive=True)
+    
+    async def do_on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle user input submission"""
         user_input = event.value.strip()
         if not user_input:
@@ -136,7 +192,9 @@ class NotepadApp(App):
             else:
                 await self.handle_note_addition(user_input)
         except Exception as e:
-            self.log_message(f"Error: {e}")
+            self.log_message(f"Error!: {e}")
+            import traceback
+            self.log_message(traceback.format_exc())
     
     async def handle_command(self, command: str) -> None:
         """Handle special commands"""
@@ -174,29 +232,52 @@ class NotepadApp(App):
             if not arg:
                 self.log_message("Error: findai requires a query")
                 return
-            self.log_message(f"AI searching for: {arg}")
-            result = self.manager.find_notes_ai(arg)
-            self.log_message("AI search completed")
-            self.update_content_display(f"AI Result: {result}")
+            
+            # Start AI search with streaming
+            self.update_content_display(f"AI searching for: {arg}")
+            
+            full_response = ""
+            search_response = "AI Result: "
+            self.update_content_display(search_response)
+            
+            async for chunk in self.manager.find_notes_ai_stream(arg):
+                full_response += chunk
+                # Update content display with streaming response (replace mode)
+                search_response = f"AI Result: {full_response}"
+                self.update_content_display(search_response, append=False)                 
+            
+            # Add final result to content history
+            self.update_content_display(search_response, append=True)
             
         else:
             self.log_message(f"Unknown command: {cmd}")
     
     async def handle_ai_chat(self, message: str) -> None:
-        """Handle AI chat"""
+        """Handle AI chat with streaming"""
         prompt = message[1:].strip()
         self.log_message(f"AI Chat: {prompt}")
-        self.log_message("AI is thinking...")
         
-        response = self.manager.ai_chat(prompt, self.chat_history)
-        self.log_message("AI response received")
+        # Add user message to content display
+        self.update_content_display(f"User: {prompt}")
         
-        content = f"User: {prompt}\nAI: {response}\n"
-        self.update_content_display(content)
+        # Start AI response with streaming
+        ai_response = "AI: "
+        self.update_content_display(ai_response)
+        
+        full_response = ""
+        async for chunk in self.manager.ai_chat_stream(prompt, self.chat_history, self._ai_log_callback):
+            full_response += chunk
+            # Update content display with streaming response (replace mode)
+            ai_response = f"AI: {full_response}"
+            self.update_content_display(ai_response, append=False)
+            await asyncio.sleep(0)
+        
+        # Add final message to content history
+        # self.update_content_display(ai_response, append=True)
         
         # Add to chat history
         self.chat_history.append({'role': 'user', 'content': prompt})
-        self.chat_history.append({'role': 'assistant', 'content': response})
+        self.chat_history.append({'role': 'assistant', 'content': full_response})
         
         # Keep history manageable
         if len(self.chat_history) > 20:
@@ -213,6 +294,9 @@ class NotepadApp(App):
         await self.manager.add_note_async(note)
         self.log_message("Note saved successfully")
         self.update_content_display(f"Note saved: {note}")
+        
+        # Also log the AI analysis that happened during saving
+        # This will be shown through the callback we set
     
     def action_clear_log(self) -> None:
         """Clear the log panel"""

@@ -9,6 +9,16 @@ class NoteManager:
         self.ai = OllamaClient()
         self.queue = asyncio.Queue()
         self.is_processing = False
+        self._log_callback = None
+    
+    def set_log_callback(self, callback):
+        """Set callback for logging operations"""
+        self._log_callback = callback
+    
+    def _log_callback(self, message: str, is_chunk: bool = False):
+        """Internal log callback that forwards to set callback"""
+        if self._log_callback:
+            self._log_callback(message, is_chunk)
 
     async def add_note_async(self, content):
         # Put the note in the queue to be processed
@@ -25,7 +35,7 @@ class NoteManager:
             try:
                 # Run CPU-bound/network-bound tasks in executor to avoid blocking the event loop
                 loop = asyncio.get_running_loop()
-                tags = await loop.run_in_executor(None, self.ai.analyze_note, content)
+                tags = await self.ai.analyze_note_async(content, log_callback=self._log_callback)
                 embedding = await loop.run_in_executor(None, self.ai.get_embedding, content)
                 
                 # Database operations
@@ -43,7 +53,27 @@ class NoteManager:
         embedding = self.ai.get_embedding(query)
         return self.db.vector_search(embedding)
 
+    async def find_notes_ai_stream(self, query, log_callback=None):
+        """Async streaming AI search with logging"""
+        if log_callback:
+            log_callback(f"AI searching for: {query}")
+        
+        # For AI search, we get top K candidates via vector search
+        # and then let the AI filter/summarize
+        candidates = self.find_notes(query)
+        if not candidates:
+            if log_callback:
+                log_callback("No relevant notes found")
+            return
+        
+        context = "\n".join([f"Note {n[0]}: {n[1]} (Tags: {n[2]})" for n in candidates])
+        prompt = f"Based on the following notes, answer the user's question: {query}\n\nNotes:\n{context}"
+        
+        async for chunk in self.ai.chat_stream(prompt, log_callback=log_callback):
+            yield chunk
+    
     def find_notes_ai(self, query):
+        """Non-streaming AI search for backward compatibility"""
         # For AI search, we get top K candidates via vector search
         # and then let the AI filter/summarize
         candidates = self.find_notes(query)
@@ -54,5 +84,17 @@ class NoteManager:
         prompt = f"Based on the following notes, answer the user's question: {query}\n\nNotes:\n{context}"
         return self.ai.chat(prompt)
 
+    async def fake_stream(self):
+        for i in range(10):
+            await asyncio.sleep(0.5) # Имитация ожидания
+            yield f"Токен {i} "
+
+    async def ai_chat_stream(self, prompt, history, log_callback=None):
+        """Async streaming AI chat with logging"""
+        async for chunk in self.ai.chat_stream(prompt, history, log_callback):
+            yield chunk
+        
+    
     def ai_chat(self, prompt, history):
+        """Non-streaming AI chat for backward compatibility"""
         return self.ai.chat(prompt, history)
