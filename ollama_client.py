@@ -106,11 +106,17 @@ class OllamaClient:
         return response['message']['content']
 
     async def ask_async(self, prompt: str, think: bool=False, log_callback:callable=None):
-        chunk_stream = self.chat_stream(prompt, think=think, log_callback=log_callback)
-        response = ""
-        async for chunk in chunk_stream:
-            response += chunk
-        return response
+        # Use sync ollama.chat in executor to avoid async issues
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: ollama.chat(
+                model=self.ai_model,
+                messages=[{'role': 'user', 'content': prompt}],
+                think=think
+            )
+        )
+        return response['message']['content']
 
     def chat(self, prompt: str, history=None):
         messages = []
