@@ -10,7 +10,7 @@ class NoteManager:
         self.queue = asyncio.Queue()
         self.is_processing = False
         self._log_callback = None
-    
+   
     def set_log_callback(self, callback):
         """Set callback for logging operations"""
         self._log_callback = callback
@@ -22,6 +22,7 @@ class NoteManager:
 
     async def add_note_async(self, content):
         # Put the note in the queue to be processed
+        self._log_callback(f"Adding note: {content}")
         await self.queue.put(content)
         
         # Start the worker if it's not running
@@ -35,13 +36,13 @@ class NoteManager:
             try:
                 # Run CPU-bound/network-bound tasks in executor to avoid blocking the event loop
                 loop = asyncio.get_running_loop()
-                tags = await self.ai.analyze_note_async(content, log_callback=self._log_callback)
+                tags = await self.ai.analyze_note(content, log_callback=self._log_callback)
                 embedding = await loop.run_in_executor(None, self.ai.get_embedding, content)
                 
                 # Database operations
                 await loop.run_in_executor(None, self.db.add_note, content, embedding, tags)
             except Exception as e:
-                print(f"\nError saving note: {e}")
+                self._log_callback(f"Error saving note: {e}")
             finally:
                 self.queue.task_done()
         self.is_processing = False
@@ -53,23 +54,21 @@ class NoteManager:
         embedding = self.ai.get_embedding(query)
         return self.db.vector_search(embedding)
 
-    async def find_notes_ai_stream(self, query, log_callback=None):
+    async def find_notes_ai_stream(self, query):
         """Async streaming AI search with logging"""
-        if log_callback:
-            log_callback(f"AI searching for: {query}")
+        self._log_callback(f"AI searching for: {query}")
         
         # For AI search, we get top K candidates via vector search
         # and then let the AI filter/summarize
         candidates = self.find_notes(query)
         if not candidates:
-            if log_callback:
-                log_callback("No relevant notes found")
+            self._log_callback("No relevant notes found")
             return
         
         context = "\n".join([f"Note {n[0]}: {n[1]} (Tags: {n[2]})" for n in candidates])
         prompt = f"Based on the following notes, answer the user's question: {query}\n\nNotes:\n{context}"
         
-        async for chunk in self.ai.chat_stream(prompt, log_callback=log_callback):
+        async for chunk in self.ai.chat_stream(prompt, log_callback=self._log_callback):
             yield chunk
     
     def find_notes_ai(self, query):
@@ -89,9 +88,9 @@ class NoteManager:
             await asyncio.sleep(0.5) # Имитация ожидания
             yield f"Токен {i} "
 
-    async def ai_chat_stream(self, prompt, history, log_callback=None):
+    async def ai_chat_stream(self, prompt, history):
         """Async streaming AI chat with logging"""
-        async for chunk in self.ai.chat_stream(prompt, history, log_callback):
+        async for chunk in self.ai.chat_stream(prompt, history, log_callback=self._log_callback):
             yield chunk
         
     
