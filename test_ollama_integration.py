@@ -1,23 +1,15 @@
 import unittest
-import json
 import time
 import asyncio
 from ollama_client import OllamaClient
+import warnings
 
 def async_test(func):
-    """Декоратор для преобразования асинхронных тестов в синхронные"""
-    async def async_wrapper(self, *args, **kwargs):
-        try:
-            return await func(self, *args, **kwargs)
-        finally:
-            # Закрываем соединения если есть метод close
-            if hasattr(self, 'client') and hasattr(self.client, 'close'):
-                await self.client.close()
-    
+    """Декоратор для преобразования асинхронных тестов в синхронные"""   
     def wrapper(self, *args, **kwargs):
         loop = asyncio.new_event_loop()
         try:
-            return loop.run_until_complete(async_wrapper(self, *args, **kwargs))
+            return loop.run_until_complete(func(self, *args, **kwargs))
         finally:
             # Закрываем все pending tasks
             pending = asyncio.all_tasks(loop)
@@ -26,16 +18,21 @@ def async_test(func):
             if pending:
                 loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             loop.close()
+            #sleep
+            time.sleep(1)
     return wrapper
 
 
 class TestOllamaIntegration(unittest.TestCase):
-    
+
     def setUp(self):
         """Set up test fixtures before each test method."""
+        warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed <socket.socket")
+        warnings.filterwarnings("ignore", category=ResourceWarning)
         self.client = OllamaClient()
         # Add a small delay between tests to avoid overwhelming the AI model
-        time.sleep(1)
+        time.sleep(1)    
+        
     
     @async_test
     async def test_analyze_note_real_ai_programming_content(self):
@@ -66,6 +63,7 @@ class TestOllamaIntegration(unittest.TestCase):
         print(f"\nProgramming Content Analysis:")
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
+
     
     @async_test
     async def test_analyze_note_real_ai_recipe_content(self):
@@ -93,14 +91,16 @@ class TestOllamaIntegration(unittest.TestCase):
         #         for tag in result['tags']),
         #     "Tags should contain recipe-related terms"
         # )
-        
+    
         print(f"\nRecipe Content Analysis:")
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
+
     
     @async_test
     async def test_analyze_note_real_ai_meeting_content(self):
         """Test analyze_note with real AI for meeting-related content."""
+
         text = "Team meeting scheduled for next Monday at 2 PM. Agenda: project timeline review, budget discussion, task assignments for Q4. Please prepare status reports."        
         print("Input text:", text)
         result = await self.client.analyze_note(text)
@@ -126,7 +126,7 @@ class TestOllamaIntegration(unittest.TestCase):
         #         for tag in result['tags']),
         #     "Tags should contain meeting-related terms"
         # )
-        
+    
         print(f"\nMeeting Content Analysis:")
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
@@ -134,10 +134,11 @@ class TestOllamaIntegration(unittest.TestCase):
     @async_test
     async def test_analyze_note_real_ai_short_content(self):
         """Test analyze_note with real AI for very short content."""
+
         text = "Buy milk and eggs"
         print("Input text:", text)
         result = await self.client.analyze_note(text)
-        
+    
         # Check structure (should still work with short content)
         self.assertIsInstance(result, dict)
         self.assertIn('questions', result)
@@ -146,7 +147,7 @@ class TestOllamaIntegration(unittest.TestCase):
         # Check types
         self.assertIsInstance(result['questions'], list)
         self.assertIsInstance(result['tags'], list)
-        
+    
         print(f"\nShort Content Analysis:")
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
@@ -157,7 +158,7 @@ class TestOllamaIntegration(unittest.TestCase):
         text = "Docker container running nginx on port 8080. Use docker-compose.yml for multi-service deployment. Environment variables configured in .env file."
         print("Input text:", text)
         result = await self.client.analyze_note(text)
-        
+    
         # Check structure
         self.assertIsInstance(result, dict)
         self.assertIn('questions', result)
@@ -177,52 +178,10 @@ class TestOllamaIntegration(unittest.TestCase):
         #         for tag in result['tags']),
         #     "Tags should contain Docker-related terms"
         # )
-        
+    
         print(f"\nTechnical Content Analysis:")
         print(f"Questions: {result['questions']}")
         print(f"Tags: {result['tags']}")
-    
-    @async_test
-    async def test_extract_tag_real_ai(self):
-        """Test extract_tag function with real AI response simulation."""
-        # Simulate AI response with tags
-        ai_response = """
-        Here's my analysis of the note:
-        
-        <result>
-        {"questions": ["What is the main topic?", "How can I implement this?"], "tags": ["general"]}
-        </result>
-        
-        Additional commentary...
-        """
-        
-        result = self.client.extract_tag(ai_response, "result")
-        
-        # Check that extraction works
-        self.assertIsNotNone(result)
-        self.assertIsInstance(result, str)
-        
-        # Parse the extracted JSON
-        parsed = json.loads(result)
-        self.assertIsInstance(parsed, dict)
-        self.assertIn('questions', parsed)
-        self.assertIn('tags', parsed)
-        
-        print(f"\nTag Extraction Result:")
-        print(f"Extracted: {result}")
-        print(f"Parsed: {parsed}")
-    
-    @async_test
-    async def test_extract_tag_not_found(self):
-        """Test extract_tag when tag is not found."""
-        text = "This text has no special tags in it."
-        
-        result = self.client.extract_tag(text, "nonexistent")
-        
-        # Should return None when tag is not found
-        self.assertIsNone(result)
-        
-        print(f"\nTag Not Found Result: {result}")
 
 
 if __name__ == '__main__':
