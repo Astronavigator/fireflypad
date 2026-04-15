@@ -198,16 +198,16 @@ class NoteManager:
 
         self.is_processing = False
 
-    def list_notes(self, limit=10):
+    def list_notes(self, limit=10) -> List[Tuple[int, str, str, List[str]]]:
         """
         Get recent notes with their tags.
-        Returns: [(note_id, content, tags_list), ...]
+        Returns: [(note_id, content, created_at, tags_list), ...]
         """
         notes = self.db.get_recent(limit)
         results = []
         for note_id, content, created_at in notes:
             tags = self.db.get_note_tags(note_id)
-            results.append((note_id, content, tags))
+            results.append((note_id, content, created_at, tags))
         return results
 
     def find_notes(self, query):

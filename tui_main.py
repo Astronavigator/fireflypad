@@ -13,6 +13,7 @@ from textual.widgets import Header, Footer, Static, Input, TextArea, Log
 from textual.reactive import reactive
 from textual.binding import Binding
 from textual.message import Message
+from textual.widgets import Markdown, MarkdownViewer
 from manager import NoteManager
 
 async def fake_stream(self):
@@ -89,7 +90,7 @@ class NotepadApp(App):
                     yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>", id="help-text")
                     yield Static("AI Chat: $ <message>", id="help-text2") 
                     yield Static("Just type and Enter to save a note.", id="help-text3")
-                    yield Static("", id="content-display")
+                    yield Markdown("", id="content-display")
                 
                 # Input area
                 yield Input(placeholder="Enter note or command...", id="user-input")
@@ -139,7 +140,7 @@ class NotepadApp(App):
     
     def update_content_display(self, content: str, append: bool = True) -> None:
         """Add content to the main content display area"""
-        content_widget = self.query_one("#content-display", Static)
+        content_widget = self.query_one("#content-display", Markdown)
         
         if append:
             self.content_history.append(content)
@@ -195,7 +196,14 @@ class NotepadApp(App):
             self.log_message(f"Error!: {e}")
             import traceback
             self.log_message(traceback.format_exc())
-    
+
+    def tag_str(self, tags: list[str]) -> str:
+        return " ".join(f" [{tag}]" for tag in tags) if tags else "none"
+
+    def note_markdown(self, note: tuple) -> str:
+        tags_str = self.tag_str(note[3])
+        return f"> **\\#{note[0]}** {note[2]}\n>\n> {note[1]} \n>\n> {tags_str}\n\n"
+
     async def handle_command(self, command: str) -> None:
         """Handle special commands"""
         cmd_parts = command[2:].strip().split(maxsplit=1)
@@ -207,10 +215,9 @@ class NotepadApp(App):
             notes = self.manager.list_notes(limit)
             self.log_message(f"Listing {len(notes)} recent notes")
             
-            content = "--- Recent Notes ---\n"
+            content = ""
             for n in notes:
-                content += f"ID {n[0]}: {n[1]} (Tags: {n[2]})\n"
-            content += "--------------------\n"
+                content += self.note_markdown(n)
             self.update_content_display(content)
             
         elif cmd == "find":
@@ -220,11 +227,11 @@ class NotepadApp(App):
             results = self.manager.find_notes(arg)
             self.log_message(f"Found {len(results)} results for '{arg}'")
             
-            content = "--- Vector Search Results ---\n"
+            content = "-------------------------\n"
             for r in results:
-                dist = r[3] if len(r) > 3 else "N/A"
+                dist = r[4] if len(r) > 4 else "N/A"
                 dist_str = f"{dist:.4f}" if isinstance(dist, (int, float)) else dist
-                content += f"ID {r[0]}: {r[1]} (Tags: {r[2]}) [Dist: {dist_str}]\n"
+                content += f"[{r[0]}], Created: {r[2]}\n{r[1]}\n(Tags: {self.tag_str(r[3])}) [Dist: {dist_str}]\n\n"
             content += "-----------------------------\n"
             self.update_content_display(content)
             

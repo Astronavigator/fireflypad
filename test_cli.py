@@ -62,9 +62,9 @@ async def main():
             results = manager.find_notes(args.query)
             logger.info(f"Found {len(results)} results:")
             for r in results:
-                note_id, content, tags, distance = r
+                note_id, content, created_at, tags, distance = r
                 tags_str = ", ".join(tags) if tags else "none"
-                logger.info(f"ID {note_id}: {content} (Tags: {tags_str}) [Dist: {distance:.4f}]")
+                logger.info(f"ID {note_id}, Created: {created_at}: {content} (Tags: {tags_str}) [Dist: {distance:.4f}]")
         except Exception as e:
             logger.exception(f"Search failed: {e}")
 
@@ -80,9 +80,9 @@ async def main():
         try:
             notes = manager.list_notes(args.limit)
             logger.info(f"Showing last {len(notes)} notes:")
-            for note_id, content, tags in notes:
+            for note_id, content, created_at, tags in notes:
                 tags_str = ", ".join(tags) if tags else "none"
-                logger.info(f"ID {note_id}: {content} (Tags: {tags_str})")
+                logger.info(f"ID {note_id}, Created: {created_at}: {content} (Tags: {tags_str})")
         except Exception as e:
             logger.exception(f"List failed: {e}")
 

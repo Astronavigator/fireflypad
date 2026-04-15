@@ -20,7 +20,7 @@ class Database:
         self.setup(conn)
         conn.close()
 
-    def setup(self, conn):
+    def setup(self, conn: sqlite3.Connection):
         cursor = conn.cursor()
         logger.info("Setting up database tables...")
 
@@ -365,13 +365,14 @@ class Database:
     # Vector Search
     # =========================================================================
 
-    def vector_search(self, query_embedding: List[float], limit: int = 5) -> List[Tuple[int, str, List[str], float]]:
+    def vector_search(self, query_embedding: List[float], limit: int = 5, max_dist: float = 0.7) -> List[Tuple[int, str, str, List[str], float]]:
         """
         Search for notes by embedding similarity.
 
         Args:
             query_embedding: The query embedding vector
             limit: Maximum number of results
+            max_dist: Maximum distance threshold (lower is more similar)
 
         Returns:
             List of (note_id, content, tags, distance) tuples
@@ -380,27 +381,30 @@ class Database:
         try:
             cursor = conn.cursor()
             # sqlite-vec format: JSON array string for query
+            #print(query_embedding)
             query_json = json.dumps(query_embedding)
 
             # Search in vec_embeddings, join with embeddings to get metadata,
             # then join with note_embeddings to get notes
             sql = """
-                SELECT DISTINCT n.id, n.content, v.distance
+                SELECT n.id, n.content, n.created_at, min(v.distance)
                 FROM vec_embeddings AS v
                 JOIN embeddings e ON v.rowid = e.id
                 JOIN note_embeddings ne ON e.id = ne.embedding_id
                 JOIN notes n ON ne.note_id = n.id
                 WHERE v.embedding MATCH ? AND k = ?
+                AND v.distance <= ?
+                GROUP BY n.id, n.content, n.created_at
                 ORDER BY v.distance ASC
             """
-            cursor.execute(sql, (query_json, limit))
+            cursor.execute(sql, (query_json, limit, max_dist))
 
             results = []
             for row in cursor.fetchall():
-                note_id, content, distance = row
+                note_id, content, created_at, distance = row
                 # Get tags for this note
                 tags = self.get_note_tags(note_id)
-                results.append((note_id, content, tags, distance))
+                results.append((note_id, content, created_at, tags, distance))
 
             return results
         finally:
@@ -420,7 +424,7 @@ class Database:
         """
         conn = self._get_conn()
         try:
-            cursor = conn.cursor()
+            cursor = conn.cursor() 
             query_json = json.dumps(query_embedding)
 
             sql = """
