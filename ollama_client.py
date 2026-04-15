@@ -7,16 +7,16 @@ import re
 import json
 
 class OllamaClient:
-    def __init__(self, embed_model=EMBEDDING_MODEL, ai_model=AI_MODEL):
+    def __init__(self, embed_model: str=EMBEDDING_MODEL, ai_model: str=AI_MODEL):
         self.embed_model = embed_model
         self.ai_model = ai_model
         self.async_client = AsyncClient()
 
-    def get_embedding(self, text):
+    def get_embedding(self, text: str):
         response = ollama.embeddings(model=self.embed_model, prompt=text)
         return response['embedding']
 
-    def ask(self, prompt, think=False):
+    def ask(self, prompt: str, think: bool=False):
         response = ollama.chat(
             model=self.ai_model,
             messages=[{'role': 'user', 'content': prompt}],
@@ -24,7 +24,14 @@ class OllamaClient:
         )
         return response['message']['content']
 
-    def chat(self, prompt, history=None):
+    async def ask_async(self, prompt: str, think: bool=False, log_callback:callable=None):
+        chunk_stream = self.chat_stream(prompt, think=think, log_callback=log_callback)
+        response = ""
+        async for chunk in chunk_stream:
+            response += chunk
+        return response
+
+    def chat(self, prompt: str, history=None):
         messages = []
         if history:
             messages.extend(history)
@@ -38,7 +45,7 @@ class OllamaClient:
             await asyncio.sleep(0.5) # Имитация ожидания
             yield f"Токен {i} "
 
-    async def chat_stream(self, prompt, history=None, log_callback=None):
+    async def chat_stream(self, prompt: str, history=None, log_callback:callable=None, think=False):
         messages = []
         if history:
             messages.extend(history)
@@ -48,7 +55,7 @@ class OllamaClient:
             model=self.ai_model, 
             messages=messages, 
             stream=True,
-            think=True
+            think=think
         )
 
         # async for chunk in self.fake_stream():
@@ -77,7 +84,7 @@ class OllamaClient:
             return match.group(1).strip()
         return None
 
-    def analyze_note(self, text) -> dict:
+    async def analyze_note(self, text: str, log_callback:callable=None) -> dict:
         prompt = "Проанализируй эту заметку и " + \
         "1. Составь список потенциальных вопросов, на которые она отвечает (вопросов которые будет задвать пользователь rag системе)" + \
         "2. Составь список тэгов, к которым можно отнести эту заметку" + \
@@ -85,7 +92,7 @@ class OllamaClient:
         '{"questions": ["вопрос1","вопрос2",...], "tags": ["тег1","тег2",...] } </result>' + \
         "<note>" + text + "</note>"
 
-        resp = self.ask(prompt)
+        resp = await self.ask_async(prompt, log_callback=log_callback)
 
         print(resp)
 
