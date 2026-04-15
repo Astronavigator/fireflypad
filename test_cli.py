@@ -42,7 +42,7 @@ async def main():
         # to see exactly where it fails.
         try:
             logger.info("Getting AI tags...")
-            tags = manager.ai.analyze_note(args.text)
+            tags = await manager.ai.analyze_note(args.text)
             logger.info(f"AI Tags: {tags} (Type: {type(tags)})")
             
             logger.info("Getting embedding...")
