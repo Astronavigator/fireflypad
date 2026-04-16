@@ -120,7 +120,7 @@ class NotepadApp(App):
                 yield Static("=== AI NOTEPAD ===", id="header")
                 with ScrollableContainer(classes="content-area"):
                     # yield Static(" [b]test[/b] *abc* [@click=app.hello_world('test')]Click me[/]")
-                    yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>", id="help-text")
+                    yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>, $$ del <id>", id="help-text")
                     yield Static("AI Chat: $ <message>", id="help-text2") 
                     yield Static("Just type and Enter to save a note.\n", id="help-text3")
                     yield Vertical(id="content-display", classes="message-container")
@@ -297,6 +297,18 @@ class NotepadApp(App):
             # Add final result to content history
             self.update_content_display(search_response, append=True)
             
+        elif cmd in ["del", "delete", "rm", "remove", "eliminar", "udalit", "udali"]:
+            if not arg or not arg.isdigit():
+                self.log_message("Error: delete requires a note number")
+                return
+            
+            note_id = int(arg)
+            success = self.manager.delete_note(note_id)
+            if success:
+                self.update_content_display(f"Note #{note_id} deleted successfully")
+            else:
+                self.update_content_display(f"Note #{note_id} not found")
+            
         else:
             self.log_message(f"Unknown command: {cmd}")
     
@@ -375,6 +387,7 @@ Commands:
   $$ list [N]     - Show last N notes (default: 10)
   $$ find <query> - Search notes by content
   $$ findai <query> - AI-powered search
+  $$ del <id>     - Delete note by ID (aliases: delete, rm, remove, eliminar, udalit, udali)
   $ <message>     - Chat with AI
   <note>          - Save as new note
 

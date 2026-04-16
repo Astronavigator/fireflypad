@@ -210,13 +210,13 @@ class NoteManager:
             results.append((note_id, content, created_at, tags))
         return results
 
-    def find_notes(self, query):
+    def find_notes(self, query, max_dist = 0.7):
         """
         Semantic vector search for notes.
         Returns: [(note_id, content, tags, distance), ...]
         """
         embedding = self.ai.get_embedding(query)
-        return self.db.vector_search(embedding)
+        return self.db.vector_search(embedding, max_dist=max_dist)
 
     async def find_notes_ai_stream(self, query):
         """Async streaming AI search with logging"""
@@ -278,6 +278,19 @@ class NoteManager:
             prompt, history, log_callback=self._log_callback
         ):
             yield chunk
+
+    def delete_note(self, note_id: int) -> bool:
+        """
+        Delete note by ID.
+        Returns: True if deleted, False if not found
+        """
+        self._log_callback(f"Deleting note {note_id}...")
+        result = self.db.delete_note(note_id)
+        if result:
+            self._log_callback(f"Note {note_id} deleted successfully")
+        else:
+            self._log_callback(f"Note {note_id} not found")
+        return result
 
     def ai_chat(self, prompt, history):
         """Non-streaming AI chat for backward compatibility"""
