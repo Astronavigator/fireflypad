@@ -51,6 +51,10 @@ class NotepadApp(App):
         height: 1fr;
     }
     
+    .message-container {
+        height: auto;       /* Позволяет контейнеру расти вниз */
+    }
+    
     #header {
         text-align: center;
         background: $primary;
@@ -92,7 +96,7 @@ class NotepadApp(App):
                     yield Static("AI Chat: $ <message>", id="help-text2") 
                     yield Static("Just type and Enter to save a note.", id="help-text3")
                     yield Vertical(id="content-display", classes="message-container")
-                
+
                 # Input area
                 yield Input(placeholder="Enter note or command...", id="user-input")
             
@@ -145,7 +149,7 @@ class NotepadApp(App):
         
         if append:
             # Добавляем новое сообщение как отдельный виджет
-            message_widget = Static(content, classes="message")
+            message_widget = Markdown(content, classes="message")
             container.mount(message_widget)
             self.content_history.append(content)
         else:
@@ -153,7 +157,7 @@ class NotepadApp(App):
             if container.children:
                 container.children[-1].update(content)
             else:
-                container.mount(Static(content, classes="message"))
+                container.mount(Markdown(content, classes="message"))
             
             if self.content_history:
                 self.content_history[-1] = content
