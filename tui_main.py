@@ -22,6 +22,18 @@ async def fake_stream(self):
         await asyncio.sleep(0.5) # Имитация ожидания
         yield f"Токен {i} "
 
+from textual.widgets import Markdown
+from rich.style import Style
+
+class ChatMarkdown(Markdown):
+    DEFAULT_CSS = """
+    .strong {
+      color: #ebae87;
+      text-style: bold;
+    }
+    """
+
+
 class NotepadApp(App):
     """TUI Notepad App with split panels"""
     
@@ -64,6 +76,18 @@ class NotepadApp(App):
         background: $surface;
         padding: 1;
     }
+
+    .message {
+        margin-top: 0;
+        padding-top: 0;
+    }
+
+    ScrollableContainer {
+      padding-left: 2;
+      padding-right: 2;
+      padding-top: 1;
+    }
+
     """
     
     BINDINGS = [
@@ -83,6 +107,9 @@ class NotepadApp(App):
         self.title = "AI Notepad TUI"
         self.content_history = []
     
+    def action_notify(self, string):
+        self.notify(string)
+
     def compose(self) -> ComposeResult:
         """Create the app layout"""
         yield Header()
@@ -92,9 +119,10 @@ class NotepadApp(App):
             with Vertical(classes="main-panel"):
                 yield Static("=== AI NOTEPAD ===", id="header")
                 with ScrollableContainer(classes="content-area"):
+                    # yield Static(" [b]test[/b] *abc* [@click=app.hello_world('test')]Click me[/]")
                     yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>", id="help-text")
                     yield Static("AI Chat: $ <message>", id="help-text2") 
-                    yield Static("Just type and Enter to save a note.", id="help-text3")
+                    yield Static("Just type and Enter to save a note.\n", id="help-text3")
                     yield Vertical(id="content-display", classes="message-container")
 
                 # Input area
@@ -149,7 +177,7 @@ class NotepadApp(App):
         
         if append:
             # Добавляем новое сообщение как отдельный виджет
-            message_widget = Markdown(content, classes="message")
+            message_widget = ChatMarkdown(content, classes="message")
             container.mount(message_widget)
             self.content_history.append(content)
         else:
@@ -157,7 +185,7 @@ class NotepadApp(App):
             if container.children:
                 container.children[-1].update(content)
             else:
-                container.mount(Markdown(content, classes="message"))
+                container.mount(ChatMarkdown(content, classes="message"))
             
             if self.content_history:
                 self.content_history[-1] = content
@@ -278,10 +306,10 @@ class NotepadApp(App):
         self.log_message(f"AI Chat: {prompt}")
         
         # Add user message to content display
-        self.update_content_display(f"User: {prompt}")
+        self.update_content_display(f"**User:** {prompt}")
         
         # Start AI response with streaming
-        ai_response = "AI: "
+        ai_response = "**AI:**"
         self.update_content_display(ai_response)
         
         full_response = ""
@@ -291,7 +319,7 @@ class NotepadApp(App):
         async for chunk in self.manager.ai_chat_stream(prompt, self.chat_history):
             full_response += chunk
             # Update content display with streaming response (replace mode)
-            ai_response = f"AI: {full_response}"
+            ai_response = f"**AI:** {full_response}"
             if time.time() - last_update_time > 0.1:
                 self.update_content_display(ai_response, append=False)
                 last_update_time = time.time()
