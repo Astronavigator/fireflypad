@@ -9,7 +9,7 @@ import functools
 import time
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-
+from config import OLLAMA_URL
 
 def retry_on_exception(max_attempts: int = 3, delay: float = 0.1):
     """
@@ -91,7 +91,7 @@ class OllamaClient:
     def __init__(self, embed_model: str=EMBEDDING_MODEL, ai_model: str=AI_MODEL):
         self.embed_model = embed_model
         self.ai_model = ai_model
-        self.async_client = AsyncClient()
+        self.async_client = AsyncClient(host=OLLAMA_URL)
 
     def get_embedding(self, text: str):
         response = ollama.embeddings(model=self.embed_model, prompt=text)
@@ -131,7 +131,11 @@ class OllamaClient:
             messages.extend(history)
         messages.append({'role': 'user', 'content': prompt})
         
-        response = ollama.chat(model=self.ai_model, messages=messages)
+        response = ollama.chat(
+            model=self.ai_model, 
+            messages=messages,
+            stream=True
+        )
         return response['message']['content']
 
     async def fake_stream(self):

@@ -15,6 +15,7 @@ from textual.binding import Binding
 from textual.message import Message
 from textual.widgets import Markdown, MarkdownViewer
 from manager import NoteManager
+import time
 
 async def fake_stream(self):
     for i in range(10):
@@ -273,15 +274,22 @@ class NotepadApp(App):
         self.update_content_display(ai_response)
         
         full_response = ""
+
+        # try not to update too fast
+        last_update_time = 0
         async for chunk in self.manager.ai_chat_stream(prompt, self.chat_history):
             full_response += chunk
             # Update content display with streaming response (replace mode)
             ai_response = f"AI: {full_response}"
-            self.update_content_display(ai_response, append=False)
+            if time.time() - last_update_time > 0.1:
+                self.update_content_display(ai_response, append=False)
+                last_update_time = time.time()
+            #self.update_content_display(chunk, append=True)
             await asyncio.sleep(0)
+            
         
         # Add final message to content history
-        # self.update_content_display(ai_response, append=True)
+        self.update_content_display(ai_response, append=False)
         
         # Add to chat history
         self.chat_history.append({'role': 'user', 'content': prompt})
