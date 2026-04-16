@@ -91,7 +91,7 @@ class NotepadApp(App):
                     yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>", id="help-text")
                     yield Static("AI Chat: $ <message>", id="help-text2") 
                     yield Static("Just type and Enter to save a note.", id="help-text3")
-                    yield Markdown("", id="content-display")
+                    yield Vertical(id="content-display", classes="message-container")
                 
                 # Input area
                 yield Input(placeholder="Enter note or command...", id="user-input")
@@ -141,24 +141,31 @@ class NotepadApp(App):
     
     def update_content_display(self, content: str, append: bool = True) -> None:
         """Add content to the main content display area"""
-        content_widget = self.query_one("#content-display", Markdown)
+        container = self.query_one("#content-display", Vertical)
         
         if append:
+            # Добавляем новое сообщение как отдельный виджет
+            message_widget = Static(content, classes="message")
+            container.mount(message_widget)
             self.content_history.append(content)
         else:
-            # Replace last entry instead of appending
+            # Заменяем последнее сообщение
+            if container.children:
+                container.children[-1].update(content)
+            else:
+                container.mount(Static(content, classes="message"))
+            
             if self.content_history:
                 self.content_history[-1] = content
             else:
                 self.content_history.append(content)
         
-        # Keep only last 50 entries to prevent memory issues
-        if len(self.content_history) > 50:
+        # Ограничиваем количество сообщений
+        if len(container.children) > 50:
+            # Удаляем самые старые сообщения
+            for child in container.children[:-50]:
+                child.remove()
             self.content_history = self.content_history[-50:]
-        
-        # Display all content with separators
-        full_content = "\n".join(["─" * 50] + self.content_history)
-        content_widget.update(full_content)
         
         # Auto-scroll to bottom
         self.call_after_refresh(self._scroll_to_bottom)
@@ -323,8 +330,8 @@ class NotepadApp(App):
     def action_clear_content(self) -> None:
         """Clear the content panel"""
         self.content_history.clear()
-        content_widget = self.query_one("#content-display", Static)
-        content_widget.update("")
+        container = self.query_one("#content-display", Vertical)
+        container.remove_children()
         self.log_message("Content cleared")
     
     def action_show_help(self) -> None:
