@@ -215,7 +215,7 @@ class NotepadApp(App):
             notes = self.manager.list_notes(limit)
             self.log_message(f"Listing {len(notes)} recent notes")
             
-            content = ""
+            content = "-----------\n"
             for n in notes:
                 content += self.note_markdown(n)
             self.update_content_display(content)
@@ -226,13 +226,14 @@ class NotepadApp(App):
                 return
             results = self.manager.find_notes(arg)
             self.log_message(f"Found {len(results)} results for '{arg}'")
-            
-            content = "-------------------------\n"
+            content = "-----------\n"
+            content += f"Резульаты поиска '{arg}'\n"
             for r in results:
-                dist = r[4] if len(r) > 4 else "N/A"
-                dist_str = f"{dist:.4f}" if isinstance(dist, (int, float)) else dist
-                content += f"[{r[0]}], Created: {r[2]}\n{r[1]}\n(Tags: {self.tag_str(r[3])}) [Dist: {dist_str}]\n\n"
-            content += "-----------------------------\n"
+                dist = "N/A"
+                if len(r) > 4:
+                    dist = r[4]
+                dist_str = f"{dist:.4f}" 
+                content += f"> [{r[0]}], {r[2]} \n>\n> {r[1]} \n>\n>  {self.tag_str(r[3])} [Dist: {dist_str}]\n\n"
             self.update_content_display(content)
             
         elif cmd == "findai":
