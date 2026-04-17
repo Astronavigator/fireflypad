@@ -104,7 +104,25 @@ class NotepadApp(App):
         super().__init__()
         self.manager = NoteManager()
         self.manager.set_log_callback(self._ai_log_callback)
-        self.chat_history = []
+        self.system_prompt = """Ты - AI-ассистент интегрированный в интеллектуальную записную книжку. 
+
+Твоя роль:
+- Помогать пользователю управлять заметками
+- Отвечать на вопросы о содержимом заметок
+- Помогать с поиском информации в заметках
+- Предлагать способы организации информации
+- Общаться с пользователем на любые темы (это тоже очень важно!)
+
+Контекст:
+- Пользователь может добавлять заметки командами или просто вводя текст
+- Доступны команды: list, find, findai, delete, changedb, export, clear
+- Система автоматически анализирует и индексирует заметки для семантического поиска
+- Ты видишь результаты выполнения команд в контексте беседы
+
+Всегда будь полезным и учитывай контекст записной книжки в своих ответах."""
+        
+        # Initialize chat history with system prompt
+        self.chat_history = [{'role': 'system', 'content': self.system_prompt}]
         self.title = "AI Notepad TUI"
         self.content_history = []
     
@@ -296,6 +314,9 @@ class NotepadApp(App):
                 content += self.note_markdown(n)
             self.update_content_display(content)
             
+            # Add to chat history for AI context
+            self.chat_history.append({'role': 'assistant', 'content': f"Command 'list {limit}' executed:\n{content}"})
+            
         elif command_name == "find":
             results = self.manager.find_notes(argument)
             self.log_message(f"Found {len(results)} results for '{argument}'")
@@ -308,6 +329,9 @@ class NotepadApp(App):
                 dist_str = f"{dist:.4f}" 
                 content += f"> [{r[0]}], {r[2]} \n>\n> {r[1]} \n>\n>  {self.tag_str(r[3])} [Dist: {dist_str}]\n\n"
             self.update_content_display(content)
+            
+            # Add to chat history for AI context
+            self.chat_history.append({'role': 'assistant', 'content': f"Command 'find {argument}' executed:\n{content}"})
             
         elif command_name == "findai":
             # Start AI search with streaming
@@ -326,19 +350,27 @@ class NotepadApp(App):
             # Add final result to content history
             self.update_content_display(search_response, append=True)
             
+            # Add to chat history for AI context
+            self.chat_history.append({'role': 'assistant', 'content': f"Command 'findai {argument}' executed:\n{search_response}"})
+            
         elif command_name in ["del", "delete", "rm", "remove", "eliminar", "udalit", "udali"]:
             note_id = int(argument)
             success = self.manager.delete_note(note_id)
             if success:
-                self.update_content_display(f"Note #{note_id} deleted successfully")
+                content = f"Note #{note_id} deleted successfully"
+                self.update_content_display(content)
             else:
-                self.update_content_display(f"Note #{note_id} not found")
+                content = f"Note #{note_id} not found"
+                self.update_content_display(content)
+            
+            # Add to chat history for AI context
+            self.chat_history.append({'role': 'assistant', 'content': f"Command '{command_name} {note_id}' executed:\n{content}"})
             
         elif command_name in ["cls", "clear", "clean"]:
-            # Clear chat history and content display
-            self.chat_history.clear()
+            # Clear chat history and content display but keep system prompt
+            self.chat_history = [{'role': 'system', 'content': self.system_prompt}]
             self.action_clear_content()
-            self.log_message("Chat cleared")
+            self.log_message("Chat cleared (system prompt preserved)")
             
         elif command_name in ["changedb", "db"]:
             if not argument:
@@ -349,38 +381,54 @@ class NotepadApp(App):
                 if db_files:
                     current_db = self.manager.db.db_path
                     db_list = "\n".join([f"  {'-> ' + f if os.path.abspath(f) == current_db else '  ' + f}" for f in sorted(db_files)])
-                    self.update_content_display(f"Available databases:\n{db_list}\n\nUsage: {command_name} <database_name>")
+                    content = f"Available databases:\n{db_list}\n\nUsage: {command_name} <database_name>"
                 else:
-                    self.update_content_display("No .db files found in current directory.\n\nUsage: {command_name} <database_name>")
+                    content = f"No .db files found in current directory.\n\nUsage: {command_name} <database_name>"
+                self.update_content_display(content)
+                
+                # Add to chat history for AI context
+                self.chat_history.append({'role': 'assistant', 'content': f"Command '{command_name}' executed:\n{content}"})
                 return
             
             # Add .db extension if not present
             db_name = argument if argument.endswith('.db') else f"{argument}.db"
             self.manager.change_database(db_name)
-            self.update_content_display(f"Database changed to: {db_name}")
+            content = f"Database changed to: {db_name}"
+            self.update_content_display(content)
+            
+            # Add to chat history for AI context
+            self.chat_history.append({'role': 'assistant', 'content': f"Command '{command_name} {argument}' executed:\n{content}"})
             
         elif command_name == "export":
             filename = argument
             try:
                 # Determine format based on file extension
                 if filename.endswith('.json'):
-                    content = self.manager.export_notes_json()
+                    export_content = self.manager.export_notes_json()
                 else:
                     # Default to text format
-                    content = self.manager.export_notes_text()
+                    export_content = self.manager.export_notes_text()
                     if not filename.endswith('.txt'):
                         filename = f"{filename}.txt"
                 
                 # Write to file
                 with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                    f.write(export_content)
                 
                 self.log_message(f"Exported notes to: {filename}")
-                self.update_content_display(f"Notes exported to: {filename}")
+                content = f"Notes exported to: {filename}"
+                self.update_content_display(content)
+                
+                # Add to chat history for AI context
+                self.chat_history.append({'role': 'assistant', 'content': f"Command 'export {filename}' executed:\n{content}"})
                 
             except Exception as e:
                 self.log_message(f"Export error: {e}")
-                self.update_content_display(f"Export failed: {e}")
+                content = f"Export failed: {e}"
+                self.update_content_display(content)
+                
+                # Add to chat history for AI context
+                self.chat_history.append({'role': 'assistant', 'content': f"Command 'export {filename}' failed:\n{content}"})
     
     async def handle_ai_chat(self, message: str) -> None:
         """Handle AI chat with streaming"""
@@ -421,9 +469,13 @@ class NotepadApp(App):
         self.chat_history.append({'role': 'user', 'content': prompt})
         self.chat_history.append({'role': 'assistant', 'content': full_response})
         
-        # Keep history manageable
-        if len(self.chat_history) > 20:
-            self.chat_history = self.chat_history[-20:]
+        # Keep history manageable (increased to account for command outputs)
+        if len(self.chat_history) > 50:
+            # Keep system prompt and last 49 messages
+            system_msg = self.chat_history[0] if self.chat_history[0]['role'] == 'system' else None
+            self.chat_history = self.chat_history[-49:]
+            if system_msg:
+                self.chat_history.insert(0, system_msg)
     
     async def handle_note_addition(self, note: str) -> None:
         """Handle adding a new note"""
@@ -435,7 +487,11 @@ class NotepadApp(App):
         
         await self.manager.add_note_async(note)
         self.log_message("Note saved successfully")
-        self.update_content_display(f"Note saved: {note}")
+        content = f"Note saved: {note}"
+        self.update_content_display(content)
+        
+        # Add to chat history for AI context
+        self.chat_history.append({'role': 'assistant', 'content': f"Note added:\n{content}"})
         
         # Also log the AI analysis that happened during saving
         # This will be shown through the callback we set
