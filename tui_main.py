@@ -15,6 +15,7 @@ from textual.binding import Binding
 from textual.message import Message
 from textual.widgets import Markdown, MarkdownViewer
 from manager import NoteManager
+from commands import command_registry, InputMode
 import time
 
 async def fake_stream(self):
@@ -120,9 +121,9 @@ class NotepadApp(App):
                 yield Static("=== AI NOTEPAD ===", id="header")
                 with ScrollableContainer(classes="content-area"):
                     # yield Static(" [b]test[/b] *abc* [@click=app.hello_world('test')]Click me[/]")
-                    yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>, $$ del <id>, $$ changedb <name>, $$ db <name>, $$ export <file>, $$ cls", id="help-text")
+                    yield Static("Commands: list, find <query>, findai <query>, del <id>, changedb <name>, db <name>, export <file>, cls", id="help-text")
                     yield Static("AI Chat: $ <message>", id="help-text2") 
-                    yield Static("Just type and Enter to save a note.\n", id="help-text3")
+                    yield Static("Notes: just type any text | Prefix with $$ for command-only mode", id="help-text3")
                     yield Vertical(id="content-display", classes="message-container")
 
                 # Input area
@@ -216,8 +217,8 @@ class NotepadApp(App):
         self.run_worker(self.do_on_input_submitted(event), exclusive=True)
     
     async def do_on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle user input submission"""
-        user_input = event.value.strip()
+        """Handle user input submission with new parsing logic"""
+        user_input = event.value
         if not user_input:
             return
         
@@ -226,12 +227,50 @@ class NotepadApp(App):
         input_widget.value = ""
         
         try:
-            if user_input.startswith("$$"):
-                await self.handle_command(user_input)
-            elif user_input.startswith("$"):
-                await self.handle_ai_chat(user_input)
-            else:
-                await self.handle_note_addition(user_input)
+            # Parse input using command registry
+            mode, command_name, argument = command_registry.parse_input(user_input)
+            
+            if mode == InputMode.COMMAND_ONLY:
+                # $$ prefix - must be a command
+                if command_name:
+                    is_valid, error_msg = command_registry.validate_command(command_name, argument)
+                    if is_valid:
+                        await self.handle_command(command_name, argument)
+                    else:
+                        self.log_message(error_msg)
+                        self.update_content_display(f"Error: {error_msg}")
+                else:
+                    self.log_message("Error: $$ requires a command")
+                    self.update_content_display("Error: $$ requires a command")
+            
+            elif mode == InputMode.COMMAND_OR_AI:
+                # $ prefix - command or AI chat
+                if command_name and command_registry.is_command(command_name):
+                    # It's a command
+                    is_valid, error_msg = command_registry.validate_command(command_name, argument)
+                    if is_valid:
+                        await self.handle_command(command_name, argument)
+                    else:
+                        self.log_message(error_msg)
+                        self.update_content_display(f"Error: {error_msg}")
+                else:
+                    # It's AI chat
+                    await self.handle_ai_chat(user_input)
+            
+            elif mode == InputMode.COMMAND_OR_NOTE:
+                # No prefix - command or note
+                if command_name and command_registry.is_command(command_name):
+                    # It's a command
+                    is_valid, error_msg = command_registry.validate_command(command_name, argument)
+                    if is_valid:
+                        await self.handle_command(command_name, argument)
+                    else:
+                        self.log_message(error_msg)
+                        self.update_content_display(f"Error: {error_msg}")
+                else:
+                    # It's a note
+                    await self.handle_note_addition(user_input)
+            
         except Exception as e:
             self.log_message(f"Error!: {e}")
             import traceback
@@ -244,14 +283,11 @@ class NotepadApp(App):
         tags_str = self.tag_str(note[3])
         return f"> **\\#{note[0]}** {note[2]}\n>\n> {note[1]} \n>\n> {tags_str}\n\n"
 
-    async def handle_command(self, command: str) -> None:
-        """Handle special commands"""
-        cmd_parts = command[2:].strip().split(maxsplit=1)
-        cmd = cmd_parts[0].lower()
-        arg = cmd_parts[1] if len(cmd_parts) > 1 else None
+    async def handle_command(self, command_name: str, argument: str = None) -> None:
+        """Handle commands using command registry"""
         
-        if cmd == "list":
-            limit = int(arg) if arg and arg.isdigit() else 10
+        if command_name == "list":
+            limit = int(argument) if argument and argument.isdigit() else 10
             notes = self.manager.list_notes(limit)
             self.log_message(f"Listing {len(notes)} recent notes")
             
@@ -260,14 +296,11 @@ class NotepadApp(App):
                 content += self.note_markdown(n)
             self.update_content_display(content)
             
-        elif cmd == "find":
-            if not arg:
-                self.log_message("Error: find requires a query")
-                return
-            results = self.manager.find_notes(arg)
-            self.log_message(f"Found {len(results)} results for '{arg}'")
+        elif command_name == "find":
+            results = self.manager.find_notes(argument)
+            self.log_message(f"Found {len(results)} results for '{argument}'")
             content = "-----------\n"
-            content += f"Резульаты поиска '{arg}'\n"
+            content += f"Results of search '{argument}'\n"
             for r in results:
                 dist = "N/A"
                 if len(r) > 4:
@@ -276,19 +309,15 @@ class NotepadApp(App):
                 content += f"> [{r[0]}], {r[2]} \n>\n> {r[1]} \n>\n>  {self.tag_str(r[3])} [Dist: {dist_str}]\n\n"
             self.update_content_display(content)
             
-        elif cmd == "findai":
-            if not arg:
-                self.log_message("Error: findai requires a query")
-                return
-            
+        elif command_name == "findai":
             # Start AI search with streaming
-            self.update_content_display(f"AI searching for: {arg}")
+            self.update_content_display(f"AI searching for: {argument}")
             
             full_response = ""
             search_response = "AI Result: "
             self.update_content_display(search_response)
             
-            async for chunk in self.manager.find_notes_ai_stream(arg):
+            async for chunk in self.manager.find_notes_ai_stream(argument):
                 full_response += chunk
                 # Update content display with streaming response (replace mode)
                 search_response = f"AI Result: {full_response}"
@@ -297,49 +326,41 @@ class NotepadApp(App):
             # Add final result to content history
             self.update_content_display(search_response, append=True)
             
-        elif cmd in ["del", "delete", "rm", "remove", "eliminar", "udalit", "udali"]:
-            if not arg or not arg.isdigit():
-                self.log_message("Error: delete requires a note number")
-                return
-            
-            note_id = int(arg)
+        elif command_name in ["del", "delete", "rm", "remove", "eliminar", "udalit", "udali"]:
+            note_id = int(argument)
             success = self.manager.delete_note(note_id)
             if success:
                 self.update_content_display(f"Note #{note_id} deleted successfully")
             else:
                 self.update_content_display(f"Note #{note_id} not found")
             
-        elif cmd in ["cls", "clear", "clean"]:
+        elif command_name in ["cls", "clear", "clean"]:
             # Clear chat history and content display
             self.chat_history.clear()
             self.action_clear_content()
             self.log_message("Chat cleared")
             
-        elif cmd in ["changedb", "db"]:
-            if not arg:
+        elif command_name in ["changedb", "db"]:
+            if not argument:
                 # List all .db files in current directory
                 import os
                 import glob
                 db_files = glob.glob("*.db")
                 if db_files:
                     current_db = self.manager.db.db_path
-                    db_list = "\n".join([f"  {'→ ' + f if os.path.abspath(f) == current_db else '  ' + f}" for f in sorted(db_files)])
-                    self.update_content_display(f"Available databases:\n{db_list}\n\nUsage: $$ {cmd} <database_name>")
+                    db_list = "\n".join([f"  {'-> ' + f if os.path.abspath(f) == current_db else '  ' + f}" for f in sorted(db_files)])
+                    self.update_content_display(f"Available databases:\n{db_list}\n\nUsage: {command_name} <database_name>")
                 else:
-                    self.update_content_display("No .db files found in current directory.\n\nUsage: $$ {cmd} <database_name>")
+                    self.update_content_display("No .db files found in current directory.\n\nUsage: {command_name} <database_name>")
                 return
             
             # Add .db extension if not present
-            db_name = arg if arg.endswith('.db') else f"{arg}.db"
+            db_name = argument if argument.endswith('.db') else f"{argument}.db"
             self.manager.change_database(db_name)
             self.update_content_display(f"Database changed to: {db_name}")
             
-        elif cmd == "export":
-            if not arg:
-                self.log_message("Error: export requires a filename")
-                return
-            
-            filename = arg
+        elif command_name == "export":
+            filename = argument
             try:
                 # Determine format based on file extension
                 if filename.endswith('.json'):
@@ -360,13 +381,15 @@ class NotepadApp(App):
             except Exception as e:
                 self.log_message(f"Export error: {e}")
                 self.update_content_display(f"Export failed: {e}")
-            
-        else:
-            self.log_message(f"Unknown command: {cmd}")
     
     async def handle_ai_chat(self, message: str) -> None:
         """Handle AI chat with streaming"""
-        prompt = message[1:].strip()
+        # Remove $ prefix if present
+        if message.startswith("$"):
+            prompt = message[1:].strip()
+        else:
+            prompt = message.strip()
+        
         self.log_message(f"AI Chat: {prompt}")
         
         # Add user message to content display
@@ -431,41 +454,8 @@ class NotepadApp(App):
         self.log_message("Content cleared")
     
     def action_show_help(self) -> None:
-        """Show help information"""
-        help_text = """
-=== AI NOTEPAD HELP ===
-
-Commands:
-  $$ list [N]        - Show last N notes (default: 10)
-  $$ find <query>    - Search notes by content
-  $$ findai <query>  - AI-powered search
-  $$ del <id>        - Delete note by ID (aliases: delete, rm, remove, eliminar, udalit, udali)
-  $$ changedb <name>  - Change database file (creates or loads <name>.db)
-  $$ db <name>       - Alias for changedb
-  $$ export <file>   - Export all notes to file (.txt or .json format, default: .txt)
-  $$ cls             - Clear chat history (aliases: clear, clean)
-  $ <message>        - Chat with AI
-  <note>             - Save as new note
-
-Keybindings:
-  Ctrl+C             - Quit
-  Ctrl+L             - Clear log
-  Ctrl+K             - Clear content
-  Ctrl+H             - Show this help
-
-The log panel shows all operations and status updates.
-
-Export examples:
-  $$ export notes.txt     - Export to text file
-  $$ export backup.json   - Export to JSON file
-  $$ export mynotes       - Export to mynotes.txt (default format)
-
-Database examples:
-  $$ changedb work        - Switch to work.db
-  $$ db personal          - Switch to personal.db
-  $$ db                   - List all .db files in current directory
-  $$ changedb             - List all .db files in current directory
-"""
+        """Show help information using command registry"""
+        help_text = command_registry.get_help_text()
         self.update_content_display(help_text)
         self.log_message("Help displayed")
 
