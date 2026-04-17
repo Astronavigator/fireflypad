@@ -120,7 +120,7 @@ class NotepadApp(App):
                 yield Static("=== AI NOTEPAD ===", id="header")
                 with ScrollableContainer(classes="content-area"):
                     # yield Static(" [b]test[/b] *abc* [@click=app.hello_world('test')]Click me[/]")
-                    yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>, $$ del <id>, $$ cls", id="help-text")
+                    yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>, $$ del <id>, $$ changedb <name>, $$ db <name>, $$ export <file>, $$ cls", id="help-text")
                     yield Static("AI Chat: $ <message>", id="help-text2") 
                     yield Static("Just type and Enter to save a note.\n", id="help-text3")
                     yield Vertical(id="content-display", classes="message-container")
@@ -315,6 +315,52 @@ class NotepadApp(App):
             self.action_clear_content()
             self.log_message("Chat cleared")
             
+        elif cmd in ["changedb", "db"]:
+            if not arg:
+                # List all .db files in current directory
+                import os
+                import glob
+                db_files = glob.glob("*.db")
+                if db_files:
+                    current_db = self.manager.db.db_path
+                    db_list = "\n".join([f"  {'→ ' + f if os.path.abspath(f) == current_db else '  ' + f}" for f in sorted(db_files)])
+                    self.update_content_display(f"Available databases:\n{db_list}\n\nUsage: $$ {cmd} <database_name>")
+                else:
+                    self.update_content_display("No .db files found in current directory.\n\nUsage: $$ {cmd} <database_name>")
+                return
+            
+            # Add .db extension if not present
+            db_name = arg if arg.endswith('.db') else f"{arg}.db"
+            self.manager.change_database(db_name)
+            self.update_content_display(f"Database changed to: {db_name}")
+            
+        elif cmd == "export":
+            if not arg:
+                self.log_message("Error: export requires a filename")
+                return
+            
+            filename = arg
+            try:
+                # Determine format based on file extension
+                if filename.endswith('.json'):
+                    content = self.manager.export_notes_json()
+                else:
+                    # Default to text format
+                    content = self.manager.export_notes_text()
+                    if not filename.endswith('.txt'):
+                        filename = f"{filename}.txt"
+                
+                # Write to file
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                self.log_message(f"Exported notes to: {filename}")
+                self.update_content_display(f"Notes exported to: {filename}")
+                
+            except Exception as e:
+                self.log_message(f"Export error: {e}")
+                self.update_content_display(f"Export failed: {e}")
+            
         else:
             self.log_message(f"Unknown command: {cmd}")
     
@@ -390,21 +436,35 @@ class NotepadApp(App):
 === AI NOTEPAD HELP ===
 
 Commands:
-  $$ list [N]     - Show last N notes (default: 10)
-  $$ find <query> - Search notes by content
-  $$ findai <query> - AI-powered search
-  $$ del <id>     - Delete note by ID (aliases: delete, rm, remove, eliminar, udalit, udali)
-  $$ cls          - Clear chat history (aliases: clear, clean)
-  $ <message>     - Chat with AI
-  <note>          - Save as new note
+  $$ list [N]        - Show last N notes (default: 10)
+  $$ find <query>    - Search notes by content
+  $$ findai <query>  - AI-powered search
+  $$ del <id>        - Delete note by ID (aliases: delete, rm, remove, eliminar, udalit, udali)
+  $$ changedb <name>  - Change database file (creates or loads <name>.db)
+  $$ db <name>       - Alias for changedb
+  $$ export <file>   - Export all notes to file (.txt or .json format, default: .txt)
+  $$ cls             - Clear chat history (aliases: clear, clean)
+  $ <message>        - Chat with AI
+  <note>             - Save as new note
 
 Keybindings:
-  Ctrl+C          - Quit
-  Ctrl+L          - Clear log
-  Ctrl+K          - Clear content
-  Ctrl+H          - Show this help
+  Ctrl+C             - Quit
+  Ctrl+L             - Clear log
+  Ctrl+K             - Clear content
+  Ctrl+H             - Show this help
 
 The log panel shows all operations and status updates.
+
+Export examples:
+  $$ export notes.txt     - Export to text file
+  $$ export backup.json   - Export to JSON file
+  $$ export mynotes       - Export to mynotes.txt (default format)
+
+Database examples:
+  $$ changedb work        - Switch to work.db
+  $$ db personal          - Switch to personal.db
+  $$ db                   - List all .db files in current directory
+  $$ changedb             - List all .db files in current directory
 """
         self.update_content_display(help_text)
         self.log_message("Help displayed")

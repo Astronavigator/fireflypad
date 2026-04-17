@@ -295,3 +295,32 @@ class NoteManager:
     def ai_chat(self, prompt, history):
         """Non-streaming AI chat for backward compatibility"""
         return self.ai.chat(prompt, history)
+
+    def export_notes_text(self) -> str:
+        """
+        Export all notes to text format.
+        Returns: String with all notes in text format
+        """
+        self._log_callback("Exporting notes to text format...")
+        result = self.db.export_all_notes_text()
+        self._log_callback("Export completed")
+        return result
+
+    def export_notes_json(self) -> str:
+        """
+        Export all notes to JSON format.
+        Returns: JSON string with all notes
+        """
+        self._log_callback("Exporting notes to JSON format...")
+        result = self.db.export_all_notes_json()
+        self._log_callback("Export completed")
+        return result
+
+    def change_database(self, new_db_path: str):
+        """
+        Change to a different database file.
+        Creates or loads the new database and reinitializes the structure.
+        """
+        self._log_callback(f"Changing database to: {new_db_path}")
+        self.db.change_database(new_db_path)
+        self._log_callback(f"Database changed successfully to: {new_db_path}")

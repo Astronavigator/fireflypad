@@ -20,6 +20,19 @@ class Database:
         self.setup(conn)
         conn.close()
 
+    def change_database(self, new_db_path: str):
+        """
+        Change to a different database file.
+        Creates or loads the new database and reinitializes the structure.
+        """
+        self.db_path = new_db_path
+        # Initialize new DB structure
+        conn = sqlite3.connect(self.db_path)
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        self.setup(conn)
+        conn.close()
+
     def setup(self, conn: sqlite3.Connection):
         cursor = conn.cursor()
         logger.info("Setting up database tables...")
@@ -453,3 +466,66 @@ class Database:
             return []
         num_floats = len(blob) // 4
         return list(struct.unpack(f"{num_floats}f", blob))
+
+    def export_all_notes_text(self) -> str:
+        """
+        Export all notes to text format.
+        Returns: String with all notes in text format
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, content, created_at
+                FROM notes 
+                ORDER BY id ASC
+            """)
+            
+            notes = cursor.fetchall()
+            result = []
+            
+            for note_id, content, created_at in notes:
+                tags = self.get_note_tags(note_id)
+                tags_str = ", ".join(tags) if tags else "none"
+                
+                result.append(f"=== Note #{note_id} ===")
+                result.append(f"Created: {created_at}")
+                result.append(f"Tags: {tags_str}")
+                result.append(f"Content: {content}")
+                result.append("")  # Empty line between notes
+            
+            return "\n".join(result)
+        finally:
+            conn.close()
+
+    def export_all_notes_json(self) -> str:
+        """
+        Export all notes to JSON format.
+        Returns: JSON string with all notes
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, content, created_at
+                FROM notes 
+                ORDER BY id ASC
+            """)
+            
+            notes = cursor.fetchall()
+            result = []
+            
+            for note_id, content, created_at in notes:
+                tags = self.get_note_tags(note_id)
+                
+                note_data = {
+                    "id": note_id,
+                    "content": content,
+                    "created_at": created_at,
+                    "tags": tags
+                }
+                result.append(note_data)
+            
+            return json.dumps(result, indent=2, ensure_ascii=False)
+        finally:
+            conn.close()
