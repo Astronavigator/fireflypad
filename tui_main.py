@@ -120,7 +120,7 @@ class NotepadApp(App):
                 yield Static("=== AI NOTEPAD ===", id="header")
                 with ScrollableContainer(classes="content-area"):
                     # yield Static(" [b]test[/b] *abc* [@click=app.hello_world('test')]Click me[/]")
-                    yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>, $$ del <id>", id="help-text")
+                    yield Static("Commands: $$ list, $$ find <query>, $$ findai <query>, $$ del <id>, $$ cls", id="help-text")
                     yield Static("AI Chat: $ <message>", id="help-text2") 
                     yield Static("Just type and Enter to save a note.\n", id="help-text3")
                     yield Vertical(id="content-display", classes="message-container")
@@ -309,6 +309,12 @@ class NotepadApp(App):
             else:
                 self.update_content_display(f"Note #{note_id} not found")
             
+        elif cmd in ["cls", "clear", "clean"]:
+            # Clear chat history and content display
+            self.chat_history.clear()
+            self.action_clear_content()
+            self.log_message("Chat cleared")
+            
         else:
             self.log_message(f"Unknown command: {cmd}")
     
@@ -388,6 +394,7 @@ Commands:
   $$ find <query> - Search notes by content
   $$ findai <query> - AI-powered search
   $$ del <id>     - Delete note by ID (aliases: delete, rm, remove, eliminar, udalit, udali)
+  $$ cls          - Clear chat history (aliases: clear, clean)
   $ <message>     - Chat with AI
   <note>          - Save as new note
 
