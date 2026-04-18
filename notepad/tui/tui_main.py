@@ -20,8 +20,11 @@ from textual.widgets import Footer, Header, Input, Log, Markdown, Static
 
 from notepad.core.manager import NoteManager
 from notepad.core.command_handler import CommandHandler
+from notepad.renderers.tui_renderer import RenderChunk
 from notepad.utils.commands import command_registry, InputMode
 from notepad.renderers import TUIRenderer
+
+from typing import List
 
 # Unused function - can be removed if not needed
 # async def fake_stream(self):
@@ -119,10 +122,10 @@ class NotepadApp(App):
             with Vertical(classes="main-panel"):
                 yield Static("=== AI NOTEPAD ===", id="header")
                 with ScrollableContainer(classes="content-area"):
-                    # yield Static(" [b]test[/b] *abc* [@click=app.hello_world('test')]Click me[/]")
+                    #yield Static(" [b]test[/b] *abc* [@click=app.hello_world('test')]Click me[/]")
                     yield Static("Commands: list, find <query>, findai <query>, del <id>, changedb <name>, db <name>, export <file>, cls", id="help-text")
                     yield Static("AI Chat: $ <message>", id="help-text2") 
-                    yield Static("Notes: just type any text | Prefix with $$ for command-only mode", id="help-text3")
+                    yield Static("Notes: just type any text | Prefix with $$ for command-only mode\n", id="help-text3")
                     yield Vertical(id="content-display", classes="message-container")
 
                 # Input area
@@ -164,14 +167,25 @@ class NotepadApp(App):
         # This will be replaced with proper data rendering
         pass
     
+    def renderToUi(self, chunks: List[RenderChunk]) -> None:
+        """Render chunks to UI"""
+        for chunk in chunks:
+            if chunk['mode'] == 'add':
+                widget = Static
+                if chunk["format"] == 'markdown':
+                    widget = ChatMarkdown
+                self.update_content_display(chunk['content'], new_widget=True, widget=widget)
+            elif chunk['mode'] == 'update':
+                self.update_content_display(chunk['content'], new_widget=False)
+
     def _handle_streaming_result(self, result) -> None:
         """Handle streaming results from CommandHandler"""
-        content = self.renderer.render_streaming_result(result)
-        if content:
+        render_res = self.renderer.render_streaming_result(result)
+        if render_res:
             # Determine if this should replace or add new content
-            is_chunk = result.type.value == "ai_stream_chunk"
-            self.update_content_display(content, new_widget=not is_chunk)
-    
+            #is_chunk = result.type.value == "ai_stream_chunk"
+            #self.update_content_display(content, new_widget=not is_chunk)
+            self.renderToUi(render_res)
 
     def _ai_log_callback(self, message: str, is_chunk: bool = False) -> None:
         """Callback for AI operations logging"""
@@ -316,14 +330,18 @@ class NotepadApp(App):
         
         # Render the result for display
         if result.type.value == "command_result":
-            content = self.renderer.render_command_result(result)
-            self.update_content_display(content)
+            #content = self.renderer.render_command_result(result)
+            #self.update_content_display(content)
+            render_chunks = self.renderer.render_command_result(result)
+            self.renderToUi(render_chunks)
             
             # Add to chat history for AI context
-            self._add_to_chat_history('assistant', f"Command '{command_name} {argument or ''}' executed:\n{content}")
+            #self._add_to_chat_history('assistant', f"Command '{command_name} {argument or ''}' executed:\n{content}")
         elif result.type.value == "error":
-            self.update_content_display(f"**Error:** {result.message}")
-            self.log_message(f"Command error: {result.message}")
+            #self.update_content_display(f"**Error:** {result.message}")
+            #self.log_message(f"Command error: {result.message}")
+            render_chunks = self.renderer.render_error(result.message)
+            self.renderToUi(render_chunks)
     
     async def handle_ai_chat(self, message: str) -> None:
         """Handle AI chat - now delegates to CommandHandler"""
@@ -367,10 +385,10 @@ class NotepadApp(App):
         self.update_content_display(help_text)
         self.log_message("Help displayed")
     
-    def action_change_database(self, db_name: str) -> None:
+    async def action_change_database(self, db_name: str) -> None:
         """Handle database change from clickable links"""
         # Simulate command input
-        self.run_worker(self.handle_command("changedb", db_name), exclusive=True)
+        await self.handle_command("changedb", db_name)
 
 
 def main():
