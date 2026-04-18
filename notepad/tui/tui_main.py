@@ -19,6 +19,7 @@ from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, Log, Markdown, Static
 
 from notepad.core.manager import NoteManager
+from notepad.core.command_handler import CommandHandler
 from notepad.utils.commands import command_registry, InputMode
 
 # Unused function - can be removed if not needed
@@ -75,6 +76,16 @@ class NotepadApp(App):
         
         self.manager = NoteManager()
         self.manager.set_log_callback(self._ai_log_callback)
+        
+        # Initialize command handler with callbacks
+        self.command_handler = CommandHandler(self.manager)
+        self.command_handler.set_callbacks(
+            update_content=self.update_content_display,
+            log_message=self.log_message,
+            add_to_history=self._add_to_chat_history,
+            clear_content=self._clear_chat_and_content,
+            system_prompt=self.system_prompt
+        )
         
         # Initialize chat history with system prompt
         self.chat_history = [{'role': 'system', 'content': self.system_prompt}]
@@ -261,174 +272,27 @@ class NotepadApp(App):
             import traceback
             self.log_message(traceback.format_exc())
 
-    def tag_str(self, tags: list[str]) -> str:
-        return " ".join(f" [{tag}]" for tag in tags) if tags else "none"
-
-    def note_markdown(self, note: tuple) -> str:
-        tags_str = self.tag_str(note[3])
-        return f"> **\\#{note[0]}** {note[2]}\n>\n> {note[1]} \n>\n> {tags_str}\n\n"
-
-    async def handle_command(self, command_name: str, argument: str = None) -> None:
-        """Handle commands using command registry"""
+    def _add_to_chat_history(self, role: str, content: str) -> None:
+        """Add message to chat history"""
+        self.chat_history.append({'role': role, 'content': content})
         
-        if command_name == "list":
-            limit = int(argument) if argument and argument.isdigit() else 10
-            notes = self.manager.list_notes(limit)
-            self.log_message(f"Listing {len(notes)} recent notes")
-            
-            content = "-----------\n"
-            for n in notes:
-                content += self.note_markdown(n)
-            self.update_content_display(content)
-            
-            # Add to chat history for AI context
-            self.chat_history.append({'role': 'assistant', 'content': f"Command 'list {limit}' executed:\n{content}"})
-            
-        elif command_name == "find":
-            results = self.manager.find_notes(argument)
-            self.log_message(f"Found {len(results)} results for '{argument}'")
-            content = "-----------\n"
-            content += f"Results of search '{argument}'\n"
-            for r in results:
-                dist = "N/A"
-                if len(r) > 4:
-                    dist = r[4]
-                dist_str = f"{dist:.4f}" 
-                content += f"> [{r[0]}], {r[2]} \n>\n> {r[1]} \n>\n>  {self.tag_str(r[3])} [Dist: {dist_str}]\n\n"
-            self.update_content_display(content)
-            
-            # Add to chat history for AI context
-            self.chat_history.append({'role': 'assistant', 'content': f"Command 'find {argument}' executed:\n{content}"})
-            
-        elif command_name == "findai":
-            # Start AI search with streaming
-            self.update_content_display(f"AI searching for: {argument}")
-            
-            full_response = ""
-            search_response = "AI Result: "
-            self.update_content_display(search_response)
-            
-            async for chunk in self.manager.find_notes_ai_stream(argument):
-                full_response += chunk
-                # Update content display with streaming response (replace mode)
-                search_response = f"AI Result: {full_response}"
-                self.update_content_display(search_response, new_widget=False)                 
-            
-            # Add final result to content history
-            self.update_content_display(search_response, new_widget=True)
-            
-            # Add to chat history for AI context
-            self.chat_history.append({'role': 'assistant', 'content': f"Command 'findai {argument}' executed:\n{search_response}"})
-            
-        elif command_name in ["del", "delete", "rm", "remove", "eliminar", "udalit", "udali"]:
-            note_id = int(argument)
-            success = self.manager.delete_note(note_id)
-            if success:
-                content = f"Note #{note_id} deleted successfully"
-                self.update_content_display(content)
-            else:
-                content = f"Note #{note_id} not found"
-                self.update_content_display(content)
-            
-            # Add to chat history for AI context
-            self.chat_history.append({'role': 'assistant', 'content': f"Command '{command_name} {note_id}' executed:\n{content}"})
-            
-        elif command_name in ["cls", "clear", "clean"]:
-            # Clear chat history and content display but keep system prompt
-            self.chat_history = [{'role': 'system', 'content': self.system_prompt}]
-            self.action_clear_content()
-            self.log_message("Chat cleared (system prompt preserved)")
-            
-        elif command_name in ["changedb", "db"]:
-            if not argument:
-                # List all .db files in data directory with clickable links
-                import os
-                import glob
-                from notepad.utils.config import DATA_DIR
-                
-                db_files = glob.glob(str(DATA_DIR / "*.db"))
-                if db_files:
-                    current_db = self.manager.db.db_path
-                    
-                    # Create header
-                    self.update_content_display("\n[green]📁 Available Databases[/]\n" +\
-                        f"[b]Location:[/] `{DATA_DIR}`\n" +\
-                        f"[b]Current database:[/] `{os.path.basename(current_db)}`\n",
-                        new_widget=True, widget=Static
-                    )
-                    db_strs = []
-                    
-                    # Add clickable database files
-                    for db_file in sorted(db_files):
-                        db_name = os.path.basename(db_file)
-                        is_current = os.path.abspath(db_file) == current_db
-                        
-                        if is_current:
-                            db_strs.append(f"[b green]{db_name}[b]")
-                        else:
-                            # Make it clickable
-                            clickable_db = f"[@click=app.change_database('{db_name}')]{db_name}[/]"
-                            db_strs.append(clickable_db)
-                                        
-                    content = " ".join(db_strs) + "\n"
-                else:
-                    content = f"## 📭 No Database Files\n\nNo `.db` files found in `{DATA_DIR}`.\n\n**Usage:** `{command_name} <database_name>`"
-                
-                self.update_content_display(content, new_widget=True, widget=Static)
-                
-                # Add to chat history for AI context
-                self.chat_history.append({'role': 'assistant', 'content': f"Command '{command_name}' executed:\n{content}"})
-                return
-            
-            # Add .db extension if not present
-            from notepad.utils.config import DATA_DIR
-            db_name = argument if argument.endswith('.db') else f"{argument}.db"
-            db_path = str(DATA_DIR / db_name)
-            
-            try:
-                self.manager.change_database(db_path)
-                content = f"✅ Switched to database `{db_name}`"
-                self.log_message(f"Database changed to: {db_name}")
-                self.update_content_display(content)
-            except Exception as e:
-                content = f"❌ Database Change Failed\n\n**Error:** {str(e)}\n**Attempted database:** `{db_name}`"
-                self.log_message(f"Failed to change database: {e}")
-                self.update_content_display(content)
-            
-            # Add to chat history for AI context
-            self.chat_history.append({'role': 'assistant', 'content': f"Command '{command_name} {argument}' executed:\n{content}"})
-            
-        elif command_name == "export":
-            filename = argument
-            try:
-                # Determine format based on file extension
-                if filename.endswith('.json'):
-                    export_content = self.manager.export_notes_json()
-                else:
-                    # Default to text format
-                    export_content = self.manager.export_notes_text()
-                    if not filename.endswith('.txt'):
-                        filename = f"{filename}.txt"
-                
-                # Write to file
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(export_content)
-                
-                self.log_message(f"Exported notes to: {filename}")
-                content = f"Notes exported to: {filename}"
-                self.update_content_display(content)
-                
-                # Add to chat history for AI context
-                self.chat_history.append({'role': 'assistant', 'content': f"Command 'export {filename}' executed:\n{content}"})
-                
-            except Exception as e:
-                self.log_message(f"Export error: {e}")
-                content = f"Export failed: {e}"
-                self.update_content_display(content)
-                
-                # Add to chat history for AI context
-                self.chat_history.append({'role': 'assistant', 'content': f"Command 'export {filename}' failed:\n{content}"})
-
+        # Keep history manageable (increased to account for command outputs)
+        if len(self.chat_history) > 50:
+            # Keep system prompt and last 49 messages
+            system_msg = self.chat_history[0] if self.chat_history[0]['role'] == 'system' else None
+            self.chat_history = self.chat_history[-49:]
+            if system_msg:
+                self.chat_history.insert(0, system_msg)
+    
+    def _clear_chat_and_content(self) -> None:
+        """Clear chat history and content display but keep system prompt"""
+        self.chat_history = [{'role': 'system', 'content': self.system_prompt}]
+        self.action_clear_content()
+    
+    
+    async def handle_command(self, command_name: str, argument: str = None) -> None:
+        """Handle commands using command registry - delegates to CommandHandler"""
+        await self.command_handler.execute_command(command_name, argument)
     
     async def handle_ai_chat(self, message: str) -> None:
         """Handle AI chat with streaming"""
@@ -465,17 +329,9 @@ class NotepadApp(App):
         # Add final message to content history
         self.update_content_display(ai_response, new_widget=False)
         
-        # Add to chat history
-        self.chat_history.append({'role': 'user', 'content': prompt})
-        self.chat_history.append({'role': 'assistant', 'content': full_response})
-        
-        # Keep history manageable (increased to account for command outputs)
-        if len(self.chat_history) > 50:
-            # Keep system prompt and last 49 messages
-            system_msg = self.chat_history[0] if self.chat_history[0]['role'] == 'system' else None
-            self.chat_history = self.chat_history[-49:]
-            if system_msg:
-                self.chat_history.insert(0, system_msg)
+        # Add to chat history using callback
+        self._add_to_chat_history('user', prompt)
+        self._add_to_chat_history('assistant', full_response)
     
     async def handle_note_addition(self, note: str) -> None:
         """Handle adding a new note"""
@@ -490,8 +346,8 @@ class NotepadApp(App):
         content = f"Note saved: {note}"
         self.update_content_display(content)
         
-        # Add to chat history for AI context
-        self.chat_history.append({'role': 'assistant', 'content': f"Note added:\n{content}"})
+        # Add to chat history for AI context using callback
+        self._add_to_chat_history('assistant', f"Note added:\n{content}")
         
         # Also log the AI analysis that happened during saving
         # This will be shown through the callback we set
