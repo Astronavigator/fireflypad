@@ -6,24 +6,25 @@ Log panel: Operation logs, saving status, tags, etc.
 """
 
 import asyncio
+import time
 from datetime import datetime
+
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Static, Input, TextArea, Log
-from textual.reactive import reactive
 from textual.binding import Binding
+from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.message import Message
-from textual.widgets import Markdown, MarkdownViewer
+from textual.reactive import reactive
+from textual.widgets import Footer, Header, Input, Log, Markdown, Static
+
 from notepad.core.manager import NoteManager
 from notepad.utils.commands import command_registry, InputMode
-import time
 
-async def fake_stream(self):
-    for i in range(10):
-        await asyncio.sleep(0.5) # Имитация ожидания
-        yield f"Токен {i} "
+# Unused function - can be removed if not needed
+# async def fake_stream(self):
+#     for i in range(10):
+#         await asyncio.sleep(0.5) # Имитация ожидания
+#         yield f"Токен {i} "
 
-from textual.widgets import Markdown
 from rich.style import Style
 
 class ChatMarkdown(Markdown):
@@ -221,12 +222,14 @@ class NotepadApp(App):
         # Auto-scroll to bottom
         self.call_after_refresh(self._scroll_to_bottom)
     
-    def _scroll_to_bottom(self) -> None:
+    async def _scroll_to_bottom(self) -> None:
         """Scroll the content area to the bottom"""
         try:
             # Get the scrollable container and scroll to end
             scroll_container = self.query_one(".content-area", ScrollableContainer)
+            await asyncio.sleep(0.1)
             scroll_container.scroll_end(animate=False)
+
         except Exception as e:
             self.log_message(f"Scroll error: {e}")
     
@@ -374,27 +377,59 @@ class NotepadApp(App):
             
         elif command_name in ["changedb", "db"]:
             if not argument:
-                # List all .db files in current directory
+                # List all .db files in data directory with clickable links
                 import os
                 import glob
-                db_files = glob.glob("*.db")
+                from notepad.utils.config import DATA_DIR
+                
+                db_files = glob.glob(str(DATA_DIR / "*.db"))
                 if db_files:
                     current_db = self.manager.db.db_path
-                    db_list = "\n".join([f"  {'-> ' + f if os.path.abspath(f) == current_db else '  ' + f}" for f in sorted(db_files)])
-                    content = f"Available databases:\n{db_list}\n\nUsage: {command_name} <database_name>"
+                    
+                    # Create header
+                    self.update_content_display("\n[green]📁 Available Databases[/]\n" +\
+                        f"[b]Location:[/] `{DATA_DIR}`\n" +\
+                        f"[b]Current database:[/] `{os.path.basename(current_db)}`\n",
+                        new_widget=True, widget=Static
+                    )
+                    db_strs = []
+                    
+                    # Add clickable database files
+                    for db_file in sorted(db_files):
+                        db_name = os.path.basename(db_file)
+                        is_current = os.path.abspath(db_file) == current_db
+                        
+                        if is_current:
+                            db_strs.append(f"[b green]{db_name}[b]")
+                        else:
+                            # Make it clickable
+                            clickable_db = f"[@click=app.change_database('{db_name}')]{db_name}[/]"
+                            db_strs.append(clickable_db)
+                                        
+                    content = " ".join(db_strs) + "\n"
                 else:
-                    content = f"No .db files found in current directory.\n\nUsage: {command_name} <database_name>"
-                self.update_content_display(content)
+                    content = f"## 📭 No Database Files\n\nNo `.db` files found in `{DATA_DIR}`.\n\n**Usage:** `{command_name} <database_name>`"
+                
+                self.update_content_display(content, new_widget=True, widget=Static)
                 
                 # Add to chat history for AI context
                 self.chat_history.append({'role': 'assistant', 'content': f"Command '{command_name}' executed:\n{content}"})
                 return
             
             # Add .db extension if not present
+            from notepad.utils.config import DATA_DIR
             db_name = argument if argument.endswith('.db') else f"{argument}.db"
-            self.manager.change_database(db_name)
-            content = f"Database changed to: {db_name}"
-            self.update_content_display(content)
+            db_path = str(DATA_DIR / db_name)
+            
+            try:
+                self.manager.change_database(db_path)
+                content = f"✅ Switched to database `{db_name}`"
+                self.log_message(f"Database changed to: {db_name}")
+                self.update_content_display(content)
+            except Exception as e:
+                content = f"❌ Database Change Failed\n\n**Error:** {str(e)}\n**Attempted database:** `{db_name}`"
+                self.log_message(f"Failed to change database: {e}")
+                self.update_content_display(content)
             
             # Add to chat history for AI context
             self.chat_history.append({'role': 'assistant', 'content': f"Command '{command_name} {argument}' executed:\n{content}"})
@@ -429,6 +464,7 @@ class NotepadApp(App):
                 
                 # Add to chat history for AI context
                 self.chat_history.append({'role': 'assistant', 'content': f"Command 'export {filename}' failed:\n{content}"})
+
     
     async def handle_ai_chat(self, message: str) -> None:
         """Handle AI chat with streaming"""
@@ -514,6 +550,11 @@ class NotepadApp(App):
         help_text = command_registry.get_help_text()
         self.update_content_display(help_text)
         self.log_message("Help displayed")
+    
+    def action_change_database(self, db_name: str) -> None:
+        """Handle database change from clickable links"""
+        # Simulate command input
+        self.run_worker(self.handle_command("changedb", db_name), exclusive=True)
 
 
 def main():
