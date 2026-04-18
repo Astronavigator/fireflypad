@@ -62,8 +62,15 @@ notepad/
 
 ### Core Components
 
+**command_handler.py** - `CommandHandler`
+- Centralized business logic for all command execution
+- Returns structured `CommandResult` objects instead of formatted strings
+- Unified AI chat handling with streaming support via callbacks
+- Clean separation between business logic and UI presentation
+- Supports different result types: COMMAND_RESULT, AI_STREAM_*, ERROR, LOG
+
 **manager.py** - `NoteManager`
-- Central business logic coordinator
+- Database operations and note processing logic
 - Manages async queue (`asyncio.Queue`) for note processing to avoid UI blocking
 - Uses `run_in_executor` for blocking operations (Ollama calls, DB writes)
 - Streaming support for AI chat via `chat_stream()`
@@ -92,7 +99,36 @@ notepad/
 - Command definitions with aliases and argument requirements
 - Extended command set including database management, export, stats, theme switching
 
+**cli/cli_adapter.py** - `CLIAdapter`
+- Adapts CommandHandler results for console display
+- Renders structured data as plain text for CLI interface
+- Handles streaming callbacks for AI operations
+- Simple data-to-text conversion without markdown dependencies
+
 ### Key Implementation Patterns
+
+**Structured Data Architecture**
+CommandHandler returns structured data, UI layers handle presentation:
+```python
+# command_handler.py
+result = await command_handler.execute_command("list", 10)
+# Returns CommandResult with data: {"notes": [...], "count": 5}
+
+# UI layers render the data appropriately
+content = tui_renderer.render_command_result(result)  # Markdown
+output = cli_renderer.render_command_result(result)  # Plain text
+```
+
+**Streaming Callback System**
+AI operations use unified streaming via callbacks:
+```python
+# command_handler.py
+if self.streaming_callback:
+    self.streaming_callback(CommandResult(
+        type=ResultType.AI_STREAM_CHUNK,
+        data={"chunk": token, "full_response": response}
+    ))
+```
 
 **Async Queue Processing**
 Notes are processed asynchronously to avoid blocking the UI:
@@ -213,6 +249,8 @@ CREATE TABLE note_embeddings (
 
 ## Development Notes
 
+- **Architecture**: Clean separation between business logic (CommandHandler) and presentation (UI layers)
+- **Data Flow**: CommandHandler → Structured Data → UI-specific rendering
 - **Data Storage**: Uses `sqlite-vec` extension for vector operations
 - **Environment**: Development mode (`NOTEPAD_DEV=1`) uses local `data/` folder, production uses `~/.local/share/notepad/`
 - **Database Files**: `notes.db` (main), `abc.db` (alternative), configurable via `$$ changedb`
@@ -221,3 +259,5 @@ CREATE TABLE note_embeddings (
 - **Package Installation**: Poetry scripts `notepad` and `notepad-tui` provide direct command access
 - **CSS Styling**: TUI themes located in `notepad/assets/css/`
 - **Extensibility**: Command registry system allows easy addition of new commands
+- **Streaming**: Unified streaming system works across CLI and TUI interfaces
+- **Error Handling**: Centralized error reporting through CommandResult objects
