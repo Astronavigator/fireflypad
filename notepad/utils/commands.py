@@ -189,9 +189,9 @@ class CommandRegistry:
     def get_help_text(self) -> str:
         """Generate help text for all commands"""
         help_lines = [
-            "=== AI NOTEPAD HELP ===",
+            "# AI NOTEPAD HELP ",
             "",
-            "Commands:",
+            "## Commands:",
         ]
         
         for command in self.get_all_commands():
@@ -203,35 +203,28 @@ class CommandRegistry:
             if command.arg_description:
                 arg_str = f" {command.arg_description}"
             
-            help_lines.append(f"  $$ {command.name}{arg_str}{aliases_str} - {command.description}")
+            help_lines.append(f" * {command.name}{arg_str}{aliases_str} - *{command.description}*")
         
         help_lines.extend([
-            "",
-            "AI Chat:",
+            "## Notes:",
+            "  Any text which is not a command will be saved as a new note.",
+            "  Use $$ to force command mode. Use $ to use ai chat.",
+            "## AI Chat:",
             "  $ <message>     - Chat with AI",
-            "",
-            "Notes:",
-            "  <note>          - Save as new note",
-            "",
-            "New syntax (without $$):",
-            "  command [arg]   - Execute command",
-            "  $ command [arg] - Execute command or AI chat",
-            "  message         - Save as note",
-            "",
-            "Keybindings:",
-            "  Ctrl+C          - Quit",
-            "  Ctrl+L          - Clear log",
-            "  Ctrl+K          - Clear content",
-            "  Ctrl+H          - Show this help",
-            "",
+            "## Keybindings:",
+            " * ```Ctrl+C``` - Quit",
+            " * ```Ctrl+L``` - Clear log",
+            " * ```Ctrl+X``` - Clear content",
+            " * ```Ctrl+J``` - Show this help",
             "The log panel shows all operations and status updates.",
-            "",
-            "Examples:",
+            "## Examples:",
+            "```",
             "  $$ list         - List notes (command only mode)",
             "  list 5          - List 5 notes (command or note mode)",
             "  $ find apples   - Search for apples (command or AI mode)",
             "  $ hello         - AI chat (command or AI mode)",
             "  my note text    - Save as note (command or note mode)",
+            "```"
         ])
         
         return "\n".join(help_lines)
