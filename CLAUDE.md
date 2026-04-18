@@ -56,6 +56,7 @@ notepad/
   cli/           # Command-line interface
   core/          # Core business logic
   tui/           # Textual TUI interface
+  renderers/     # UI-specific data renderers
   utils/         # Utilities and configuration
   assets/        # CSS, icons, themes
 ```
@@ -101,9 +102,19 @@ notepad/
 
 **cli/cli_adapter.py** - `CLIAdapter`
 - Adapts CommandHandler results for console display
-- Renders structured data as plain text for CLI interface
+- Uses CLIRenderer for data-to-text conversion
 - Handles streaming callbacks for AI operations
-- Simple data-to-text conversion without markdown dependencies
+- Simple adapter layer without rendering logic
+
+**renderers/tui_renderer.py** - `TUIRenderer`
+- Renders CommandHandler results as Markdown for TUI display
+- Handles streaming results with proper formatting
+- Converts structured data to Textual-compatible Markdown
+
+**renderers/cli_renderer.py** - `CLIRenderer`
+- Renders CommandHandler results as plain text for CLI display
+- Handles streaming results with console-friendly output
+- Converts structured data to terminal-compatible format
 
 ### Key Implementation Patterns
 

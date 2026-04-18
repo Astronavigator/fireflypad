@@ -9,6 +9,7 @@ import re
 from typing import List, Optional
 from notepad.core.command_handler import CommandHandler
 from notepad.core.manager import NoteManager
+from notepad.renderers import CLIRenderer
 
 
 class CLIAdapter:
@@ -16,6 +17,7 @@ class CLIAdapter:
     
     def __init__(self, manager: NoteManager):
         self.command_handler = CommandHandler(manager)
+        self.renderer = CLIRenderer()
         self.last_output = ""
         self.chat_history = []
         
@@ -37,86 +39,10 @@ class CLIAdapter:
     
     def _handle_streaming_result(self, result) -> None:
         """Handle streaming results from CommandHandler"""
-        from notepad.core.command_handler import ResultType
-        
-        if result.type == ResultType.AI_STREAM_START:
-            if result.data.get("type") == "search":
-                print(f"\nAI searching for: {result.data['query']}")
-            else:
-                print(f"\nUser: {result.data['prompt']}")
-                print("AI is thinking...")
-            
-        elif result.type == ResultType.AI_STREAM_CHUNK:
-            # For CLI, we'll collect chunks and show at the end
-            pass
-            
-        elif result.type == ResultType.AI_STREAM_END:
-            if result.data.get("query"):
-                # AI search result
-                print(f"AI Result: {result.data['full_response']}")
-            else:
-                # AI chat result  
-                print(f"{result.data['full_response']}")
-            
-        elif result.type == ResultType.ERROR:
-            print(f"Error: {result.message}")
+        content = self.renderer.render_streaming_result(result)
+        if content:
+            print(content)
     
-    def _render_command_result(self, result) -> str:
-        """Render command result as plain text for CLI display"""
-        from notepad.core.command_handler import ResultType
-        
-        if result.command == "list":
-            notes = result.data["notes"]
-            if not notes:
-                return "No notes found"
-                
-            content = f"Found {result.data['count']} notes:\n"
-            content += "-" * 40 + "\n"
-            for note in notes:
-                tags_str = ", ".join(note["tags"]) if note["tags"] else "none"
-                content += f"#{note['id']} {note['title']}\n"
-                content += f"{note['content']}\n"
-                content += f"Tags: {tags_str}\n\n"
-            return content
-            
-        elif result.command == "find":
-            query = result.data["query"]
-            results = result.data["results"]
-            if not results:
-                return f"No results found for '{query}'"
-                
-            content = f"Results for '{query}' ({result.data['count']} found):\n"
-            content += "-" * 40 + "\n"
-            for result_note in results:
-                dist_str = f"{result_note['distance']:.4f}" if result_note['distance'] else "N/A"
-                tags_str = ", ".join(result_note["tags"]) if result_note["tags"] else "none"
-                content += f"#{result_note['id']} {result_note['title']}\n"
-                content += f"{result_note['content']}\n"
-                content += f"Tags: {tags_str} (Distance: {dist_str})\n\n"
-            return content
-            
-        elif result.command == "delete":
-            return result.message
-            
-        elif result.command == "list_databases":
-            databases = result.data["databases"]
-            current_db = result.data["current_db"]
-            content = f"Available databases in {result.data['data_dir']}:\n"
-            content += f"Current: {current_db}\n"
-            content += "-" * 30 + "\n"
-            for db in databases:
-                marker = " (current)" if db["is_current"] else ""
-                content += f"{db['name']}{marker}\n"
-            return content
-            
-        elif result.command == "change_database":
-            return result.message
-            
-        elif result.command == "export":
-            return result.message
-            
-        else:
-            return result.message or "Command executed"
     
     def _handle_log_message(self, message: str) -> None:
         """Handle log message"""
@@ -142,7 +68,7 @@ class CLIAdapter:
         
         # Render the result for console display
         if result.type.value == "command_result":
-            output = self._render_command_result(result)
+            output = self.renderer.render_command_result(result)
             self.last_output = output
             return output
         elif result.type.value == "error":

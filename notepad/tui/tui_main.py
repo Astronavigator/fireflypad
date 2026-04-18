@@ -21,6 +21,7 @@ from textual.widgets import Footer, Header, Input, Log, Markdown, Static
 from notepad.core.manager import NoteManager
 from notepad.core.command_handler import CommandHandler
 from notepad.utils.commands import command_registry, InputMode
+from notepad.renderers import TUIRenderer
 
 # Unused function - can be removed if not needed
 # async def fake_stream(self):
@@ -76,6 +77,9 @@ class NotepadApp(App):
         
         self.manager = NoteManager()
         self.manager.set_log_callback(self._ai_log_callback)
+        
+        # Initialize renderer
+        self.renderer = TUIRenderer()
         
         # Initialize command handler with callbacks
         self.command_handler = CommandHandler(self.manager)
@@ -162,74 +166,12 @@ class NotepadApp(App):
     
     def _handle_streaming_result(self, result) -> None:
         """Handle streaming results from CommandHandler"""
-        from notepad.core.command_handler import ResultType
-        
-        if result.type == ResultType.AI_STREAM_START:
-            if result.data.get("type") == "search":
-                content = f"AI searching for: {result.data['query']}"
-            else:
-                content = f"**User:** {result.data['prompt']}\n**AI:**"
-            self.update_content_display(content)
-            
-        elif result.type == ResultType.AI_STREAM_CHUNK:
-            if result.data.get("type") == "search":
-                content = f"AI Result: {result.data['full_response']}"
-            else:
-                content = f"**AI:** {result.data['full_response']}"
-            self.update_content_display(content, new_widget=False)
-            
-        elif result.type == ResultType.AI_STREAM_END:
-            # Final update already handled in chunk
-            pass
-            
-        elif result.type == ResultType.ERROR:
-            self.update_content_display(f"**Error:** {result.message}")
+        content = self.renderer.render_streaming_result(result)
+        if content:
+            # Determine if this should replace or add new content
+            is_chunk = result.type.value == "ai_stream_chunk"
+            self.update_content_display(content, new_widget=not is_chunk)
     
-    def _render_command_result(self, result) -> str:
-        """Render command result as markdown for TUI display"""
-        from notepad.core.command_handler import ResultType
-        
-        if result.command == "list":
-            notes = result.data["notes"]
-            content = "-----------\n"
-            for note in notes:
-                tags_str = " ".join(f"[{tag}]" for tag in note["tags"]) if note["tags"] else "none"
-                content += f"> **#{note['id']}** {note['title']}\n>\n> {note['content']} \n>\n> {tags_str}\n\n"
-            return content
-            
-        elif result.command == "find":
-            query = result.data["query"]
-            results = result.data["results"]
-            content = f"-----------\nResults of search '{query}'\n"
-            for result_note in results:
-                dist_str = f"{result_note['distance']:.4f}" if result_note['distance'] else "N/A"
-                tags_str = " ".join(f"[{tag}]" for tag in result_note["tags"]) if result_note["tags"] else "none"
-                content += f"> [{result_note['id']}], {result_note['title']} \n>\n> {result_note['content']} \n>\n>  {tags_str} [Dist: {dist_str}]\n\n"
-            return content
-            
-        elif result.command == "delete":
-            return result.message
-            
-        elif result.command == "list_databases":
-            databases = result.data["databases"]
-            current_db = result.data["current_db"]
-            content = f"\n?? Available Databases\nLocation: `{result.data['data_dir']}`\nCurrent database: `{current_db}`\n\n"
-            
-            for db in databases:
-                if db["is_current"]:
-                    content += f"**{db['name']}** (current)\n"
-                else:
-                    content += f"{db['name']}\n"
-            return content
-            
-        elif result.command == "change_database":
-            return result.message
-            
-        elif result.command == "export":
-            return result.message
-            
-        else:
-            return result.message or "Command executed"
 
     def _ai_log_callback(self, message: str, is_chunk: bool = False) -> None:
         """Callback for AI operations logging"""
@@ -374,7 +316,7 @@ class NotepadApp(App):
         
         # Render the result for display
         if result.type.value == "command_result":
-            content = self._render_command_result(result)
+            content = self.renderer.render_command_result(result)
             self.update_content_display(content)
             
             # Add to chat history for AI context
