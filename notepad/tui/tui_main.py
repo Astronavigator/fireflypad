@@ -6,8 +6,10 @@ Log panel: Operation logs, saving status, tags, etc.
 """
 
 import asyncio
+import os
 import time
 from datetime import datetime
+from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -39,58 +41,45 @@ class ChatMarkdown(Markdown):
 class NotepadApp(App):
     """TUI Notepad App with split panels"""
     
-    CSS = """
-    .main-panel {
-        width: 70%;
-        height: 1fr;
-        border: solid $primary;
-    }
-    
-    .log-panel {
-        width: 30%;
-        height: 1fr;
-        border: solid $secondary;
-    }
-
-    .log-content {
-      text-style: italic;
-    }
-    
-    .input-area {
-        height: 3;
-        border: solid $accent;
-    }
-    
-    .content-area {
-        height: 1fr;
-    }
-    
-    .message-container {
-        height: auto;       /* Позволяет контейнеру расти вниз */
-    }
-    
-    #header {
-        text-align: center;
-        background: $primary;
-    }
-    
-    #log {
-        background: $surface;
-        padding: 1;
-    }
-
-    .message {
-        margin-top: 0;
-        padding-top: 0;
-    }
-
-    ScrollableContainer {
-      padding-left: 2;
-      padding-right: 2;
-      padding-top: 1;
-    }
-
-    """
+    def __init__(self):
+        super().__init__()
+        
+        # Load CSS from file
+        css_path = Path(__file__).parent.parent / "assets" / "css" / "tui_styles.tcss"
+        if css_path.exists():
+            with open(css_path, 'r', encoding='utf-8') as f:
+                self.CSS = f.read()
+        else:
+            # Fallback CSS if file doesn't exist
+            self.CSS = """
+            .main-panel {
+                width: 70%;
+                height: 1fr;
+                border: solid $primary;
+            }
+            .log-panel {
+                width: 30%;
+                height: 1fr;
+                border: solid $secondary;
+            }
+            """
+        
+        # Load system prompt from file
+        prompt_path = Path(__file__).parent.parent / "assets" / "prompts" / "system_prompt.md"
+        if prompt_path.exists():
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                self.system_prompt = f.read().strip()
+        else:
+            # Fallback system prompt
+            self.system_prompt = "You are an AI assistant integrated into an intelligent notepad."
+        
+        self.manager = NoteManager()
+        self.manager.set_log_callback(self._ai_log_callback)
+        
+        # Initialize chat history with system prompt
+        self.chat_history = [{'role': 'system', 'content': self.system_prompt}]
+        self.title = "AI Notepad TUI"
+        self.content_history = []
     
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit"),
@@ -101,31 +90,6 @@ class NotepadApp(App):
     
     current_input: reactive[str] = reactive("")
     
-    def __init__(self):
-        super().__init__()
-        self.manager = NoteManager()
-        self.manager.set_log_callback(self._ai_log_callback)
-        self.system_prompt = """Ты - AI-ассистент интегрированный в интеллектуальную записную книжку. 
-
-Твоя роль:
-- Помогать пользователю управлять заметками
-- Отвечать на вопросы о содержимом заметок
-- Помогать с поиском информации в заметках
-- Предлагать способы организации информации
-- Общаться с пользователем на любые темы (это тоже очень важно!)
-
-Контекст:
-- Пользователь может добавлять заметки командами или просто вводя текст
-- Доступны команды: list, find, findai, delete, changedb, export, clear
-- Система автоматически анализирует и индексирует заметки для семантического поиска
-- Ты видишь результаты выполнения команд в контексте беседы
-
-Всегда будь полезным и учитывай контекст записной книжки в своих ответах."""
-        
-        # Initialize chat history with system prompt
-        self.chat_history = [{'role': 'system', 'content': self.system_prompt}]
-        self.title = "AI Notepad TUI"
-        self.content_history = []
     
     def action_notify(self, string):
         self.notify(string)
