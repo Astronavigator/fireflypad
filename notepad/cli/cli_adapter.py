@@ -25,14 +25,98 @@ class CLIAdapter:
             log_message=self._handle_log_message,
             add_to_history=self._handle_add_to_history,
             clear_content=self._handle_clear_content,
+            streaming=self._handle_streaming_result,
             system_prompt="You are an AI assistant integrated into an intelligent notepad."
         )
     
-    def _handle_content_update(self, content: str, **kwargs) -> None:
-        """Handle content update - convert markdown to plain text"""
-        # Remove markdown formatting for console
-        plain_text = self._markdown_to_plain(content)
-        self.last_output = plain_text
+    def _handle_content_update(self, result) -> None:
+        """Handle content update - render structured data for console"""
+        # This callback is now handled by _handle_streaming_result for streaming
+        # and execute_command for regular commands
+        pass
+    
+    def _handle_streaming_result(self, result) -> None:
+        """Handle streaming results from CommandHandler"""
+        from notepad.core.command_handler import ResultType
+        
+        if result.type == ResultType.AI_STREAM_START:
+            if result.data.get("type") == "search":
+                print(f"\nAI searching for: {result.data['query']}")
+            else:
+                print(f"\nUser: {result.data['prompt']}")
+                print("AI is thinking...")
+            
+        elif result.type == ResultType.AI_STREAM_CHUNK:
+            # For CLI, we'll collect chunks and show at the end
+            pass
+            
+        elif result.type == ResultType.AI_STREAM_END:
+            if result.data.get("query"):
+                # AI search result
+                print(f"AI Result: {result.data['full_response']}")
+            else:
+                # AI chat result  
+                print(f"{result.data['full_response']}")
+            
+        elif result.type == ResultType.ERROR:
+            print(f"Error: {result.message}")
+    
+    def _render_command_result(self, result) -> str:
+        """Render command result as plain text for CLI display"""
+        from notepad.core.command_handler import ResultType
+        
+        if result.command == "list":
+            notes = result.data["notes"]
+            if not notes:
+                return "No notes found"
+                
+            content = f"Found {result.data['count']} notes:\n"
+            content += "-" * 40 + "\n"
+            for note in notes:
+                tags_str = ", ".join(note["tags"]) if note["tags"] else "none"
+                content += f"#{note['id']} {note['title']}\n"
+                content += f"{note['content']}\n"
+                content += f"Tags: {tags_str}\n\n"
+            return content
+            
+        elif result.command == "find":
+            query = result.data["query"]
+            results = result.data["results"]
+            if not results:
+                return f"No results found for '{query}'"
+                
+            content = f"Results for '{query}' ({result.data['count']} found):\n"
+            content += "-" * 40 + "\n"
+            for result_note in results:
+                dist_str = f"{result_note['distance']:.4f}" if result_note['distance'] else "N/A"
+                tags_str = ", ".join(result_note["tags"]) if result_note["tags"] else "none"
+                content += f"#{result_note['id']} {result_note['title']}\n"
+                content += f"{result_note['content']}\n"
+                content += f"Tags: {tags_str} (Distance: {dist_str})\n\n"
+            return content
+            
+        elif result.command == "delete":
+            return result.message
+            
+        elif result.command == "list_databases":
+            databases = result.data["databases"]
+            current_db = result.data["current_db"]
+            content = f"Available databases in {result.data['data_dir']}:\n"
+            content += f"Current: {current_db}\n"
+            content += "-" * 30 + "\n"
+            for db in databases:
+                marker = " (current)" if db["is_current"] else ""
+                content += f"{db['name']}{marker}\n"
+            return content
+            
+        elif result.command == "change_database":
+            return result.message
+            
+        elif result.command == "export":
+            return result.message
+            
+        else:
+            return result.message or "Command executed"
     
     def _handle_log_message(self, message: str) -> None:
         """Handle log message"""
@@ -51,59 +135,27 @@ class CLIAdapter:
         self.last_output = ""
         self.chat_history = [{'role': 'system', 'content': 'System prompt preserved'}]
     
-    def _markdown_to_plain(self, markdown_text: str) -> str:
-        """Convert markdown to plain text for console display"""
-        # Remove bold formatting
-        text = re.sub(r'\*\*(.*?)\*\*', r'\1', markdown_text)
         
-        # Remove italic formatting  
-        text = re.sub(r'\*(.*?)\*', r'\1', text)
-        
-        # Remove code formatting
-        text = re.sub(r'`(.*?)`', r'\1', text)
-        
-        # Remove headers
-        text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
-        
-        # Remove blockquote markers and clean up
-        text = re.sub(r'^>\s*', '', text, flags=re.MULTILINE)
-        
-        # Remove specific markdown patterns but keep text
-        text = re.sub(r'\\#(\d+)', r'#\1', text)  # Fix note numbers
-        text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)  # Remove links, keep text
-        
-        # Clean up extra whitespace but preserve structure
-        text = re.sub(r'\n\s*\n', '\n\n', text)
-        text = text.strip()
-        
-        return text if text else "No results"
-    
     async def execute_command(self, command_name: str, argument: str = None) -> str:
         """Execute command and return console-friendly output"""
-        await self.command_handler.execute_command(command_name, argument)
-        return self.last_output
+        result = await self.command_handler.execute_command(command_name, argument)
+        
+        # Render the result for console display
+        if result.type.value == "command_result":
+            output = self._render_command_result(result)
+            self.last_output = output
+            return output
+        elif result.type.value == "error":
+            error_msg = f"Error: {result.message}"
+            self.last_output = error_msg
+            return error_msg
+        else:
+            return ""
     
     async def handle_ai_chat(self, message: str) -> str:
-        """Handle AI chat and return response"""
-        # Remove $ prefix if present
-        if message.startswith("$"):
-            prompt = message[1:].strip()
-        else:
-            prompt = message.strip()
-        
-        print(f"\nAI Chat: {prompt}")
-        print("AI is thinking...")
-        
-        # Use manager directly for streaming
-        full_response = ""
-        async for chunk in self.command_handler.manager.ai_chat_stream(prompt, self.chat_history):
-            full_response += chunk
-        
-        # Add to history
-        self._handle_add_to_history('user', prompt)
-        self._handle_add_to_history('assistant', full_response)
-        
-        return full_response
+        """Handle AI chat - now delegates to CommandHandler"""
+        await self.command_handler.handle_ai_chat(message, self.chat_history)
+        return ""  # Output is handled by streaming callback
     
     async def handle_note_addition(self, note: str) -> str:
         """Handle note addition"""

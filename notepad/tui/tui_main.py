@@ -80,10 +80,11 @@ class NotepadApp(App):
         # Initialize command handler with callbacks
         self.command_handler = CommandHandler(self.manager)
         self.command_handler.set_callbacks(
-            update_content=self.update_content_display,
+            update_content=self._handle_content_update,
             log_message=self.log_message,
             add_to_history=self._add_to_chat_history,
             clear_content=self._clear_chat_and_content,
+            streaming=self._handle_streaming_result,
             system_prompt=self.system_prompt
         )
         
@@ -153,6 +154,83 @@ class NotepadApp(App):
             current_text = log_widget.renderable
             log_widget.update(f"{current_text}{message}")
     
+    def _handle_content_update(self, result) -> None:
+        """Handle content update from CommandHandler"""
+        # For now, keep the old interface for compatibility
+        # This will be replaced with proper data rendering
+        pass
+    
+    def _handle_streaming_result(self, result) -> None:
+        """Handle streaming results from CommandHandler"""
+        from notepad.core.command_handler import ResultType
+        
+        if result.type == ResultType.AI_STREAM_START:
+            if result.data.get("type") == "search":
+                content = f"AI searching for: {result.data['query']}"
+            else:
+                content = f"**User:** {result.data['prompt']}\n**AI:**"
+            self.update_content_display(content)
+            
+        elif result.type == ResultType.AI_STREAM_CHUNK:
+            if result.data.get("type") == "search":
+                content = f"AI Result: {result.data['full_response']}"
+            else:
+                content = f"**AI:** {result.data['full_response']}"
+            self.update_content_display(content, new_widget=False)
+            
+        elif result.type == ResultType.AI_STREAM_END:
+            # Final update already handled in chunk
+            pass
+            
+        elif result.type == ResultType.ERROR:
+            self.update_content_display(f"**Error:** {result.message}")
+    
+    def _render_command_result(self, result) -> str:
+        """Render command result as markdown for TUI display"""
+        from notepad.core.command_handler import ResultType
+        
+        if result.command == "list":
+            notes = result.data["notes"]
+            content = "-----------\n"
+            for note in notes:
+                tags_str = " ".join(f"[{tag}]" for tag in note["tags"]) if note["tags"] else "none"
+                content += f"> **#{note['id']}** {note['title']}\n>\n> {note['content']} \n>\n> {tags_str}\n\n"
+            return content
+            
+        elif result.command == "find":
+            query = result.data["query"]
+            results = result.data["results"]
+            content = f"-----------\nResults of search '{query}'\n"
+            for result_note in results:
+                dist_str = f"{result_note['distance']:.4f}" if result_note['distance'] else "N/A"
+                tags_str = " ".join(f"[{tag}]" for tag in result_note["tags"]) if result_note["tags"] else "none"
+                content += f"> [{result_note['id']}], {result_note['title']} \n>\n> {result_note['content']} \n>\n>  {tags_str} [Dist: {dist_str}]\n\n"
+            return content
+            
+        elif result.command == "delete":
+            return result.message
+            
+        elif result.command == "list_databases":
+            databases = result.data["databases"]
+            current_db = result.data["current_db"]
+            content = f"\n?? Available Databases\nLocation: `{result.data['data_dir']}`\nCurrent database: `{current_db}`\n\n"
+            
+            for db in databases:
+                if db["is_current"]:
+                    content += f"**{db['name']}** (current)\n"
+                else:
+                    content += f"{db['name']}\n"
+            return content
+            
+        elif result.command == "change_database":
+            return result.message
+            
+        elif result.command == "export":
+            return result.message
+            
+        else:
+            return result.message or "Command executed"
+
     def _ai_log_callback(self, message: str, is_chunk: bool = False) -> None:
         """Callback for AI operations logging"""
         if is_chunk:
@@ -292,46 +370,22 @@ class NotepadApp(App):
     
     async def handle_command(self, command_name: str, argument: str = None) -> None:
         """Handle commands using command registry - delegates to CommandHandler"""
-        await self.command_handler.execute_command(command_name, argument)
+        result = await self.command_handler.execute_command(command_name, argument)
+        
+        # Render the result for display
+        if result.type.value == "command_result":
+            content = self._render_command_result(result)
+            self.update_content_display(content)
+            
+            # Add to chat history for AI context
+            self._add_to_chat_history('assistant', f"Command '{command_name} {argument or ''}' executed:\n{content}")
+        elif result.type.value == "error":
+            self.update_content_display(f"**Error:** {result.message}")
+            self.log_message(f"Command error: {result.message}")
     
     async def handle_ai_chat(self, message: str) -> None:
-        """Handle AI chat with streaming"""
-        # Remove $ prefix if present
-        if message.startswith("$"):
-            prompt = message[1:].strip()
-        else:
-            prompt = message.strip()
-        
-        self.log_message(f"AI Chat: {prompt}")
-        
-        # Add user message to content display
-        self.update_content_display(f"**User:** {prompt}")
-        
-        # Start AI response with streaming
-        ai_response = "**AI:**"
-        self.update_content_display(ai_response)
-        
-        full_response = ""
-
-        # try not to update too fast
-        last_update_time = 0
-        async for chunk in self.manager.ai_chat_stream(prompt, self.chat_history):
-            full_response += chunk
-            # Update content display with streaming response (replace mode)
-            ai_response = f"**AI:** {full_response}"
-            if time.time() - last_update_time > 0.1:
-                self.update_content_display(ai_response, new_widget=False)
-                last_update_time = time.time()
-            #self.update_content_display(chunk, append=True)
-            await asyncio.sleep(0)
-            
-        
-        # Add final message to content history
-        self.update_content_display(ai_response, new_widget=False)
-        
-        # Add to chat history using callback
-        self._add_to_chat_history('user', prompt)
-        self._add_to_chat_history('assistant', full_response)
+        """Handle AI chat - now delegates to CommandHandler"""
+        await self.command_handler.handle_ai_chat(message, self.chat_history)
     
     async def handle_note_addition(self, note: str) -> None:
         """Handle adding a new note"""
