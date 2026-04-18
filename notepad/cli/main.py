@@ -4,11 +4,13 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.auto_suggest import AutoSuggest
 from prompt_toolkit.history import InMemoryHistory
 from notepad.core.manager import NoteManager
+from notepad.cli.cli_adapter import CLIAdapter
+from notepad.utils.commands import command_registry, InputMode
 
 async def main():
     manager = NoteManager()
+    cli_adapter = CLIAdapter(manager)
     session = PromptSession(history=InMemoryHistory())
-    chat_history = []
 
     print("--- AI Notepad ---")
     print("Commands: $$ list, $$ find <query>, $$ findai <query>")
@@ -25,60 +27,60 @@ async def main():
             if not user_input.strip():
                 continue
 
-            if user_input.startswith("$$"):
-                # Handle commands
-                cmd_parts = user_input[2:].strip().split(maxsplit=1)
-                cmd = cmd_parts[0].lower()
-                arg = cmd_parts[1] if len(cmd_parts) > 1 else None
-
-                if cmd == "list":
-                    limit = int(arg) if arg and arg.isdigit() else 10
-                    notes = manager.list_notes(limit)
-                    print("\n--- Recent Notes ---")
-                    for n in notes:
-                        print(f"ID {n[0]}: {n[1]} (Tags: {n[2]})")
-                    print("--------------------\n")
-                    
-                elif cmd == "find":
-                    if not arg:
-                        print("Error: find requires a query.")
-                        continue
-                    results = manager.find_notes(arg)
-                    print("\n--- Vector Search Results ---")
-                    for r in results:
-                        # r[0]: id, r[1]: content, r[2]: tags, r[3]: distance
-                        dist = r[3] if len(r) > 3 else "N/A"
-                        dist_str = f"{dist:.4f}" if isinstance(dist, (int, float)) else dist
-                        print(f"ID {r[0]}: {r[1]} (Tags: {r[2]}) [Dist: {dist_str}]")
-                    print("-----------------------------\n")
-                    
-                elif cmd == "findai":
-                    if not arg:
-                        print("Error: findai requires a query.")
-                        continue
-                    print("\nAI is searching...")
-                    result = manager.find_notes_ai(arg)
-                    print(f"AI: {result}\n")
+            # Parse input using command registry
+            mode, command_name, argument = command_registry.parse_input(user_input)
+            
+            if mode == InputMode.COMMAND_ONLY:
+                # $$ prefix - must be a command
+                if command_name:
+                    is_valid, error_msg = command_registry.validate_command(command_name, argument)
+                    if is_valid:
+                        result = await cli_adapter.execute_command(command_name, argument)
+                        if result.strip():
+                            print(f"\n{result}\n")
+                        else:
+                            print("\n")
+                    else:
+                        print(f"Error: {error_msg}")
                 else:
-                    print(f"Unknown command: {cmd}")
-
-            elif user_input.startswith("$"):
-                # AI Chat
-                prompt = user_input[1:].strip()
-                print("\nAI is thinking...")
-                response = manager.ai_chat(prompt, chat_history)
-                print(f"AI: {response}\n")
-                # Add to session history for context
-                chat_history.append({'role': 'user', 'content': prompt})
-                chat_history.append({'role': 'assistant', 'content': response})
-                # Keep history manageable
-                if len(chat_history) > 20:
-                    chat_history = chat_history[-20:]
-
-            else:
-                # Add a note
-                print(f"Me: {user_input}")
-                await manager.add_note_async(user_input)
+                    print("Error: $$ requires a command")
+            
+            elif mode == InputMode.COMMAND_OR_AI:
+                # $ prefix - command or AI chat
+                if command_name and command_registry.is_command(command_name):
+                    # It's a command
+                    is_valid, error_msg = command_registry.validate_command(command_name, argument)
+                    if is_valid:
+                        result = await cli_adapter.execute_command(command_name, argument)
+                        if result.strip():
+                            print(f"\n{result}\n")
+                        else:
+                            print("\n")
+                    else:
+                        print(f"Error: {error_msg}")
+                else:
+                    # It's AI chat
+                    response = await cli_adapter.handle_ai_chat(user_input)
+                    print(f"AI: {response}\n")
+            
+            elif mode == InputMode.COMMAND_OR_NOTE:
+                # No prefix - command or note
+                if command_name and command_registry.is_command(command_name):
+                    # It's a command
+                    is_valid, error_msg = command_registry.validate_command(command_name, argument)
+                    if is_valid:
+                        result = await cli_adapter.execute_command(command_name, argument)
+                        if result.strip():
+                            print(f"\n{result}\n")
+                        else:
+                            print("\n")
+                    else:
+                        print(f"Error: {error_msg}")
+                else:
+                    # It's a note
+                    print(f"Me: {user_input}")
+                    result = await cli_adapter.handle_note_addition(user_input)
+                    print(f"{result}\n")
 
         except (KeyboardInterrupt, EOFError):
             break
