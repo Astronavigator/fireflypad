@@ -3,7 +3,7 @@ import asyncio
 from prompt_toolkit import PromptSession
 from prompt_toolkit.auto_suggest import AutoSuggest
 from prompt_toolkit.history import InMemoryHistory
-from manager import NoteManager
+from notepad.core.manager import NoteManager
 
 async def main():
     manager = NoteManager()

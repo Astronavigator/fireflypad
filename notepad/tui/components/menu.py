@@ -4,7 +4,7 @@ from colorama import Back, Fore, Style
 import time
 #import keyboard
 #import readchar
-from getch import getch
+from notepad.utils.getch import getch
 import sys
 import subprocess
 import os

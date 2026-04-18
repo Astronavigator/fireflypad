@@ -1,9 +1,14 @@
 [tool.poetry]
 name = "notepad"
 version = "0.1.0"
-description = ""
+description = "AI Notepad - Intelligent note-taking with vector search and AI integration"
 authors = ["Astro <digital.astronavigator@gmail.com>"]
-package-mode = false
+readme = "README.md"
+package-mode = true
+
+[tool.poetry.scripts]
+notepad = "notepad.cli.main:main"
+notepad-tui = "notepad.tui.tui_main:main"
 
 [tool.poetry.dependencies]
 python = "^3.12"

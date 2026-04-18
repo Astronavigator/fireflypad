@@ -4,14 +4,14 @@ import json
 import logging
 import struct
 from typing import List, Tuple, Optional, Dict
-from config import EMBEDDING_DIMENSION
+from notepad.utils.config import EMBEDDING_DIMENSION, NOTES_DB, ABC_DB
 
 logger = logging.getLogger("notes_cli")
 
 
 class Database:
-    def __init__(self, db_path="notes.db"):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        self.db_path = db_path if db_path else str(NOTES_DB)
         self.embedding_dim = EMBEDDING_DIMENSION
         # Initialize DB structure
         conn = sqlite3.connect(self.db_path)

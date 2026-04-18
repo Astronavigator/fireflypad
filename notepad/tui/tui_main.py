@@ -14,8 +14,8 @@ from textual.reactive import reactive
 from textual.binding import Binding
 from textual.message import Message
 from textual.widgets import Markdown, MarkdownViewer
-from manager import NoteManager
-from commands import command_registry, InputMode
+from notepad.core.manager import NoteManager
+from notepad.utils.commands import command_registry, InputMode
 import time
 
 async def fake_stream(self):
@@ -190,13 +190,13 @@ class NotepadApp(App):
             # For regular messages, use normal logging with timestamp
             self.log_message(f"AI: {message}")
     
-    def update_content_display(self, content: str, append: bool = True) -> None:
+    def update_content_display(self, content: str, new_widget: bool = True, widget = ChatMarkdown) -> None:
         """Add content to the main content display area"""
         container = self.query_one("#content-display", Vertical)
         
-        if append:
+        if new_widget:
             # Добавляем новое сообщение как отдельный виджет
-            message_widget = ChatMarkdown(content, classes="message")
+            message_widget = widget(content, classes="message")
             container.mount(message_widget)
             self.content_history.append(content)
         else:
@@ -345,10 +345,10 @@ class NotepadApp(App):
                 full_response += chunk
                 # Update content display with streaming response (replace mode)
                 search_response = f"AI Result: {full_response}"
-                self.update_content_display(search_response, append=False)                 
+                self.update_content_display(search_response, new_widget=False)                 
             
             # Add final result to content history
-            self.update_content_display(search_response, append=True)
+            self.update_content_display(search_response, new_widget=True)
             
             # Add to chat history for AI context
             self.chat_history.append({'role': 'assistant', 'content': f"Command 'findai {argument}' executed:\n{search_response}"})
@@ -456,14 +456,14 @@ class NotepadApp(App):
             # Update content display with streaming response (replace mode)
             ai_response = f"**AI:** {full_response}"
             if time.time() - last_update_time > 0.1:
-                self.update_content_display(ai_response, append=False)
+                self.update_content_display(ai_response, new_widget=False)
                 last_update_time = time.time()
             #self.update_content_display(chunk, append=True)
             await asyncio.sleep(0)
             
         
         # Add final message to content history
-        self.update_content_display(ai_response, append=False)
+        self.update_content_display(ai_response, new_widget=False)
         
         # Add to chat history
         self.chat_history.append({'role': 'user', 'content': prompt})
@@ -516,6 +516,10 @@ class NotepadApp(App):
         self.log_message("Help displayed")
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for TUI application"""
     app = NotepadApp()
     app.run()
+
+if __name__ == "__main__":
+    main()

@@ -1,7 +1,7 @@
 from http.client import responses
 import ollama
 from ollama import AsyncClient
-from config import EMBEDDING_MODEL, AI_MODEL
+from notepad.utils.config import EMBEDDING_MODEL, AI_MODEL
 import asyncio
 import re
 import json
@@ -9,7 +9,7 @@ import functools
 import time
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-from config import OLLAMA_URL
+from notepad.utils.config import OLLAMA_URL
 
 def retry_on_exception(max_attempts: int = 3, delay: float = 0.1):
     """

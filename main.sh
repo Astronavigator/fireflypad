@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-poetry run python main.py
+export NOTEPAD_DEV=1
+poetry run notepad

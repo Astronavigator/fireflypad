@@ -1,8 +1,8 @@
 import asyncio
 import json
 from typing import List, Tuple, Optional, Set
-from database import Database
-from ollama_client import OllamaClient
+from notepad.core.database import Database
+from notepad.core.ollama_client import OllamaClient
 
 
 class NoteManager:
