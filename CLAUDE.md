@@ -4,16 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI-powered console notepad with vector search. Users type notes which are automatically analyzed by AI for tagging, embedded, and stored. Supports semantic search via embeddings and AI-powered retrieval.
+AI-powered console notepad with vector search. Users type notes which are automatically analyzed by AI for tagging, embedded, and stored. Supports semantic search via embeddings and AI-powered retrieval. Features both CLI and advanced TUI interfaces with split-panel design.
 
 ## Tech Stack
 
 - Python 3.12
 - Poetry for dependency management
 - SQLite with `sqlite-vec` extension for vector storage
-- Ollama for embeddings (`nomic-embed-text:latest`) and AI chat (`gemma4:e2b`)
+- Ollama for embeddings (`my-qwen-q4`) and AI chat (`gemma4:e2b`)
 - `prompt-toolkit` for async CLI
-- `textual` for TUI interface
+- `textual` for advanced TUI interface with split panels
+- `numpy`, `scipy` for vector operations
+- `termcolor`, `colorama` for terminal styling
 
 ## Common Commands
 
@@ -22,28 +24,41 @@ AI-powered console notepad with vector search. Users type notes which are automa
 poetry install
 
 # Run the simple CLI (prompt-toolkit)
-poetry run python main.py
+poetry run python -m notepad.cli.main
+# OR using script:
+poetry run notepad
 
 # Run the TUI version (textual, recommended)
-poetry run python tui_main.py
+poetry run python -m notepad.tui.tui_main
+# OR using script:
+poetry run notepad-tui
 
-# Run a single test file (use poetry run for proper dependencies)
-poetry run python -m unittest test_ollama_client
-poetry run python -m unittest test_ollama_integration
-poetry run python -m unittest discover -v  # Run all tests
+# Development mode (uses local data/ folder)
+export NOTEPAD_DEV=1
+poetry run python -m notepad.cli.main
 
 # CLI test tool for debugging
-poetry run python test_cli.py add "Your note here"
-poetry run python test_cli.py find "search query"
-poetry run python test_cli.py findai "AI search query"
-poetry run python test_cli.py list --limit 5
+poetry run python experiments/test_cli.py add "Your note here"
+poetry run python experiments/test_cli.py find "search query"
+poetry run python experiments/test_cli.py findai "AI search query"
+poetry run python experiments/test_cli.py list --limit 5
 ```
 
 ## Architecture
 
 ### Entry Points
-- `main.py` - Simple async CLI using prompt-toolkit
-- `tui_main.py` - Full TUI with split panels (main content + logs) using Textual
+- `notepad/cli/main.py` - Simple async CLI using prompt-toolkit
+- `notepad/tui/tui_main.py` - Full TUI with split panels (main content + logs) using Textual
+
+### Package Structure
+```
+notepad/
+  cli/           # Command-line interface
+  core/          # Core business logic
+  tui/           # Textual TUI interface
+  utils/         # Utilities and configuration
+  assets/        # CSS, icons, themes
+```
 
 ### Core Components
 
@@ -66,8 +81,16 @@ poetry run python test_cli.py list --limit 5
 - Uses custom XML-like tags (`<result>`, `<note>`) for structured output parsing
 - `extract_tag()` helper for parsing AI responses
 
-**config.py**
-- Model configuration: `EMBEDDING_MODEL`, `AI_MODEL`, `EMBEDDING_DIMENSION`
+**utils/config.py**
+- Model configuration: `EMBEDDING_MODEL` (`my-qwen-q4`), `AI_MODEL` (`gemma4:e2b`), `EMBEDDING_DIMENSION` (1024)
+- Data directory configuration with dev/production modes
+- Database paths and Ollama URL configuration
+
+**utils/commands.py**
+- Centralized command registry and parsing system
+- Support for different input modes (COMMAND_ONLY, COMMAND_OR_AI, COMMAND_OR_NOTE)
+- Command definitions with aliases and argument requirements
+- Extended command set including database management, export, stats, theme switching
 
 ### Key Implementation Patterns
 
@@ -105,17 +128,45 @@ ORDER BY v.distance ASC
 
 ## User Commands (Runtime)
 
+### CLI Commands
 - `$$ list [N]` - Show last N notes
 - `$$ find <query>` - Semantic vector search
 - `$$ findai <query>` - AI-powered search with context synthesis
 - `$ <message>` - Chat with AI (uses conversation history)
 - Plain text - Save as new note (AI analyzes and tags automatically)
 
+### Extended Commands (TUI & CLI)
+- `$$ changedb [name]` / `$$ db [name]` - Change or list databases
+- `$$ export <format>` - Export notes (JSON, Markdown, etc.)
+- `$$ stats` - Show database statistics
+- `$$ theme <name>` - Switch TUI theme
+- `$$ help` - Show available commands
+- `$$ clear` - Clear screen/logs
+
+### Input Modes
+- `$$` - Command only mode
+- `$` - Command or AI chat mode  
+- No prefix - Command or note mode
+
 ## Testing
 
-- Unit tests: `test_ollama_client.py` - Mocked tests for structure validation
-- Integration tests: `test_ollama_integration.py` - Real Ollama calls, rate-limited with delays
-- CLI tests: `test_cli.py` - Command-line interface testing tool
+- Experimental tests: `experiments/test_ai_tools.py`, `experiments/embedding_research.py` - Development and research tests
+- CLI tests: `experiments/test_cli.py` - Command-line interface testing tool
+- Test directory: `tests/` - Currently empty, ready for structured test suite
+
+## TUI Features
+
+### Split Panel Interface
+- **Main Panel**: Note input and display
+- **Log Panel**: Operation logs, saving status, tags, AI responses
+- **Rich Styling**: Custom CSS themes, syntax highlighting for AI responses
+- **Async Operations**: Non-blocking UI with background processing
+
+### TUI-Specific Commands
+- Ctrl+C to exit
+- Theme switching via `$$ theme`
+- Real-time status indicators
+- Markdown rendering for AI responses
 
 ## Database Schema
 
@@ -160,8 +211,13 @@ CREATE TABLE note_embeddings (
 );
 ```
 
-## Notes
+## Development Notes
 
-- The `vec0.so` file is the sqlite-vec extension binary for Linux x64
-- Chat history is kept in memory (last 20 messages), not persisted to DB
-- AI-generated tags and questions are stored with each note for RAG retrieval
+- **Data Storage**: Uses `sqlite-vec` extension for vector operations
+- **Environment**: Development mode (`NOTEPAD_DEV=1`) uses local `data/` folder, production uses `~/.local/share/notepad/`
+- **Database Files**: `notes.db` (main), `abc.db` (alternative), configurable via `$$ changedb`
+- **Chat History**: Kept in memory (last 20 messages), not persisted to DB
+- **AI Integration**: AI-generated tags and questions stored with each note for RAG retrieval
+- **Package Installation**: Poetry scripts `notepad` and `notepad-tui` provide direct command access
+- **CSS Styling**: TUI themes located in `notepad/assets/css/`
+- **Extensibility**: Command registry system allows easy addition of new commands
