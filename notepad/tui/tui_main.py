@@ -103,8 +103,8 @@ class NotepadApp(App):
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit"),
         Binding("ctrl+l", "clear_log", "Clear Log"),
-        Binding("ctrl+k", "clear_content", "Clear Content"),
-        Binding("ctrl+h", "show_help", "Help"),
+        Binding("ctrl+x", "clear_content", "Clear Content"),
+        Binding("ctrl+j", "show_help", "Help"),
     ]
     
     current_input: reactive[str] = reactive("")
@@ -120,7 +120,7 @@ class NotepadApp(App):
         with Horizontal():
             # Main panel - Notepad interface (left)
             with Vertical(classes="main-panel"):
-                yield Static("=== AI NOTEPAD ===", id="header")
+                #yield Static("=== AI NOTEPAD ===", id="header")
                 with ScrollableContainer(classes="content-area"):
                     #yield Static(" [b]test[/b] *abc* [@click=app.hello_world('test')]Click me[/]")
                     yield Static("Commands: list, find <query>, findai <query>, del <id>, changedb <name>, db <name>, export <file>, cls", id="help-text")
@@ -368,12 +368,13 @@ class NotepadApp(App):
     
     def action_clear_log(self) -> None:
         """Clear the log panel"""
-        log_widget = self.query_one("#log", Log)
-        log_widget.clear()
+        log_widget = self.query_one("#log", Static)
+        log_widget.update("")
         self.log_message("Log cleared")
     
     def action_clear_content(self) -> None:
         """Clear the content panel"""
+        self.log_message("action_clear_content")
         self.content_history.clear()
         container = self.query_one("#content-display", Vertical)
         container.remove_children()
@@ -381,8 +382,9 @@ class NotepadApp(App):
     
     def action_show_help(self) -> None:
         """Show help information using command registry"""
+        self.log_message("action_show_help")
         help_text = command_registry.get_help_text()
-        self.update_content_display(help_text)
+        self.update_content_display(help_text, new_widget=True, widget = ChatMarkdown)
         self.log_message("Help displayed")
     
     async def action_change_database(self, db_name: str) -> None:
