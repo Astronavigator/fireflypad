@@ -19,7 +19,7 @@ from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, Log, Markdown, Static
 
 from notepad.core.manager import NoteManager
-from notepad.core.command_handler import CommandHandler
+from notepad.core.command_handler import CommandHandler, CommandResult
 from notepad.renderers.tui_renderer import RenderChunk
 from notepad.utils.commands import command_registry, InputMode
 from notepad.renderers import TUIRenderer
@@ -326,7 +326,7 @@ class NotepadApp(App):
     
     async def handle_command(self, command_name: str, argument: str = None) -> None:
         """Handle commands using command registry - delegates to CommandHandler"""
-        result = await self.command_handler.execute_command(command_name, argument)
+        result: CommandResult = await self.command_handler.execute_command(command_name, argument)
         
         # Render the result for display
         if result.type.value == "command_result":
@@ -336,7 +336,8 @@ class NotepadApp(App):
             self.renderToUi(render_chunks)
             
             # Add to chat history for AI context
-            #self._add_to_chat_history('assistant', f"Command '{command_name} {argument or ''}' executed:\n{content}")
+            self._add_to_chat_history('assistant', f"Command '{command_name}. Result: {result.to_string()}")
+            self.log_message(f"Command '{command_name}. Result: {result.to_string()}")
         elif result.type.value == "error":
             #self.update_content_display(f"**Error:** {result.message}")
             #self.log_message(f"Command error: {result.message}")

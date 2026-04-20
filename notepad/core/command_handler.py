@@ -34,6 +34,9 @@ class CommandResult:
     message: Optional[str] = None
     stream_id: Optional[str] = None
 
+    def to_string(self) -> str:
+        return f"<{self.command}> data: {str(self.data)}, message: {self.message}"
+
 
 class CommandHandler:
     """Handles all command business logic"""
