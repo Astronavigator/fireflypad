@@ -1,4 +1,4 @@
-# Project Summary: AI Notepad
+# Project Summary: FireflyPad
 
 ## Core Functionality
 - Console-based notepad with an editable input field.

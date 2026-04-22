@@ -24,18 +24,18 @@ AI-powered console notepad with vector search. Users type notes which are automa
 poetry install
 
 # Run the simple CLI (prompt-toolkit)
-poetry run python -m notepad.cli.main
+poetry run python -m fireflypad.cli.main
 # OR using script:
-poetry run notepad
+poetry run fireflypad
 
 # Run the TUI version (textual, recommended)
-poetry run python -m notepad.tui.tui_main
+poetry run python -m fireflypad.tui.tui_main
 # OR using script:
-poetry run notepad-tui
+poetry run fireflypad-tui
 
 # Development mode (uses local data/ folder)
-export NOTEPAD_DEV=1
-poetry run python -m notepad.cli.main
+export FIREFLYPAD_DEV=1
+poetry run python -m fireflypad.cli.main
 
 # CLI test tool for debugging
 poetry run python experiments/test_cli.py add "Your note here"
@@ -47,12 +47,12 @@ poetry run python experiments/test_cli.py list --limit 5
 ## Architecture
 
 ### Entry Points
-- `notepad/cli/main.py` - Simple async CLI using prompt-toolkit
-- `notepad/tui/tui_main.py` - Full TUI with split panels (main content + logs) using Textual
+- `fireflypad/cli/main.py` - Simple async CLI using prompt-toolkit
+- `fireflypad/tui/tui_main.py` - Full TUI with split panels (main content + logs) using Textual
 
 ### Package Structure
 ```
-notepad/
+fireflypad/
   cli/           # Command-line interface
   core/          # Core business logic
   tui/           # Textual TUI interface
@@ -263,12 +263,12 @@ CREATE TABLE note_embeddings (
 - **Architecture**: Clean separation between business logic (CommandHandler) and presentation (UI layers)
 - **Data Flow**: CommandHandler → Structured Data → UI-specific rendering
 - **Data Storage**: Uses `sqlite-vec` extension for vector operations
-- **Environment**: Development mode (`NOTEPAD_DEV=1`) uses local `data/` folder, production uses `~/.local/share/notepad/`
+- **Environment**: Development mode (`FIREFLYPAD_DEV=1`) uses local `data/` folder, production uses `~/.local/share/fireflypad/`
 - **Database Files**: `notes.db` (main), `abc.db` (alternative), configurable via `$$ changedb`
 - **Chat History**: Kept in memory (last 20 messages), not persisted to DB
 - **AI Integration**: AI-generated tags and questions stored with each note for RAG retrieval
-- **Package Installation**: Poetry scripts `notepad` and `notepad-tui` provide direct command access
-- **CSS Styling**: TUI themes located in `notepad/assets/css/`
+- **Package Installation**: Poetry scripts `fireflypad` and `fireflypad-tui` provide direct command access
+- **CSS Styling**: TUI themes located in `fireflypad/assets/css/`
 - **Extensibility**: Command registry system allows easy addition of new commands
 - **Streaming**: Unified streaming system works across CLI and TUI interfaces
 - **Error Handling**: Centralized error reporting through CommandResult objects

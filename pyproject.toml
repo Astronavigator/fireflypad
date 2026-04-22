@@ -1,14 +1,14 @@
 [tool.poetry]
-name = "notepad"
+name = "fireflypad"
 version = "0.1.0"
-description = "AI Notepad - Intelligent note-taking with vector search and AI integration"
+description = "FireflyPad - Intelligent note-taking with vector search and AI integration"
 authors = ["Astro <digital.astronavigator@gmail.com>"]
 readme = "README.md"
 package-mode = true
 
 [tool.poetry.scripts]
-notepad = "notepad.cli.main:main"
-notepad-tui = "notepad.tui.tui_main:main"
+fireflypad = "fireflypad.cli.main:main"
+fireflypad-tui = "fireflypad.tui.tui_main:main"
 
 [tool.poetry.dependencies]
 python = "^3.12"

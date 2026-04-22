@@ -69,6 +69,10 @@ class EmbeddingResearcher:
     def get_embedding(self, text):
         start_time = time.perf_counter()
         result = np.array(self.ai.get_embedding(text), dtype=np.float32)
+        # Normalize to unit length (L2 norm = 1)
+        norm = np.linalg.norm(result)
+        if norm > 0:
+            result = result / norm
         end_time = time.perf_counter()
         self.total_embedding_time += (end_time - start_time)
         self.embedding_call_count += 1

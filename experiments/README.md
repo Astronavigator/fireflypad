@@ -1,6 +1,6 @@
 # Experiments
 
-This folder contains experimental scripts and tests for the AI Notepad project.
+This folder contains experimental scripts and tests for the FireflyPad project.
 
 ## Purpose
 - Testing new features

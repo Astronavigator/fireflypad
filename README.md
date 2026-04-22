@@ -1,4 +1,4 @@
-# AI Notepad
+# FireflyPad
 
 Intelligent note-taking application with vector search and AI integration.
 
@@ -17,14 +17,14 @@ Intelligent note-taking application with vector search and AI integration.
 ```bash
 # Clone repository
 git clone <repository-url>
-cd notepad
+cd fireflypad
 
 # Install dependencies with Poetry
 poetry install
 
 # Run in development mode (uses local data/ folder)
-export NOTEPAD_DEV=1
-poetry run python -m notepad.cli.main
+export FIREFLYPAD_DEV=1
+poetry run python -m fireflypad.cli.main
 ```
 
 ### Production Installation
@@ -34,10 +34,10 @@ poetry run python -m notepad.cli.main
 poetry install
 
 # Run CLI interface
-poetry run notepad
+poetry run fireflypad
 
 # Run TUI interface  
-poetry run notepad-tui
+poetry run fireflypad-tui
 ```
 
 ## Usage
@@ -46,7 +46,7 @@ poetry run notepad-tui
 
 ```bash
 # Start CLI
-poetry run notepad
+poetry run fireflypad
 
 # Commands available in CLI:
 # $$ list [limit] - List recent notes
@@ -60,14 +60,14 @@ poetry run notepad
 
 ```bash
 # Start TUI with split-panel interface
-poetry run notepad-tui
+poetry run fireflypad-tui
 ```
 
 ## Project Structure
 
 ```
-notepad/
-- notepad/                 # Main package
+fireflypad/
+- fireflypad/              # Main package
   - core/                  # Business logic
     - manager.py          # Note management
     - database.py         # Database operations
@@ -93,19 +93,19 @@ notepad/
 
 ### Environment Variables
 
-- `NOTEPAD_DEV=1` - Use local data/ folder (development mode)
+- `FIREFLYPAD_DEV=1` - Use local data/ folder (development mode)
 - `OLLAMA_URL` - Ollama server URL (default: http://localhost:11434)
 
 ### AI Models
 
-Configure in `notepad/utils/config.py`:
+Configure in `fireflypad/utils/config.py`:
 - `EMBEDDING_MODEL` - Model for text embeddings
 - `AI_MODEL` - Chat model for AI assistance
 
 ## Data Storage
 
 - **Development**: `data/` folder in project root
-- **Production**: `~/.local/share/notepad/`
+- **Production**: `~/.local/share/fireflypad/`
 
 ## Development
 
