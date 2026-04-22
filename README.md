@@ -15,6 +15,22 @@ Intelligent note-taking application with vector search and AI integration.
 
 ## Installation
 
+### Prerequisites
+
+- Python 3.10+
+- Poetry (for development)
+  ```bash
+  pipx install poetry
+  ```
+- Ollama (for AI features)
+  Visit https://ollama.com/download for installation instructions
+- Recommended ollama models:
+  * AI 'gemma4:e2b', 'gemma4:e4b' or 'kimi-k2.5:cloud'
+  * Embedding 'embeddinggemma:300m-qat-q4_0' or 'qwen3-embedding:0.6b'
+  You can try to use any other ollama models.
+  Models are configured in fireflypad/utils/config.py
+  EMBEDDING_DIMENSION should match the embedding model you choose.
+
 ### Development Installation
 
 ```bash
