@@ -1,0 +1,48 @@
+.main-panel {
+    width: 70%;
+    height: 1fr;
+    border: solid $primary;
+}
+
+.log-panel {
+    width: 30%;
+    height: 1fr;
+    border: solid $secondary;
+}
+
+.log-content {
+  text-style: italic;
+}
+
+.input-area {
+    height: 3;
+    border: solid $accent;
+}
+
+.content-area {
+    height: 1fr;
+}
+
+.message-container {
+    height: auto;       /* Allows container to grow downwards */
+}
+
+#header {
+    text-align: center;
+    background: $primary;
+}
+
+#log {
+    background: $surface;
+    padding: 1;
+}
+
+.message {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+ScrollableContainer {
+  padding-left: 2;
+  padding-right: 2;
+}
