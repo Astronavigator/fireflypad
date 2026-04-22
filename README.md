@@ -2,7 +2,8 @@
 
 Intelligent note-taking application with vector search and AI integration.
 
-![Firefly screenshort](screenshort.png)
+<img width="600"  alt="screenshot" src="https://github.com/user-attachments/assets/0cc5c73c-4e0d-4e23-acf1-dd9631bb6a8c" />
+
 
 ## Features
 
