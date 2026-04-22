@@ -2,6 +2,8 @@
 
 Intelligent note-taking application with vector search and AI integration.
 
+![Firefly screenshort](screenshort.png)
+
 ## Features
 
 - Smart note management with semantic search
